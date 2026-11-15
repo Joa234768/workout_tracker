@@ -42,6 +42,7 @@ export async function launch({ debugPort = 9333, width = 375, height = 740 } = {
       '--no-first-run',
       '--hide-scrollbars',
       `--remote-debugging-port=${debugPort}`,
+      '--remote-debugging-address=127.0.0.1', // reachable from this PC only
       `--user-data-dir=${profileDir}`,
       'about:blank',
     ],

@@ -14,7 +14,7 @@ The full feature list and roadmap are in `SPEC.md`. Read it before starting any 
 - **All personal data lives on the device in IndexedDB.** Nothing personal is ever committed to the repo.
 
 ## Commands
-- Local dev server: `py -m http.server 8000` (on this PC Python runs as `py`), then open `http://localhost:8000`. Service workers need a server, so double-clicking `index.html` won't work. On localhost the service worker prefers the network, so edits show up on reload.
+- Local dev server: `py -m http.server 8000 --bind 127.0.0.1` (on this PC Python runs as `py`), then open `http://localhost:8000`. Always keep `--bind 127.0.0.1`: without it, every device on the same Wi-Fi could read everything in the repo folder, including `.git`. Service workers need a server, so double-clicking `index.html` won't work. On localhost the service worker prefers the network, so edits show up on reload.
 - Logic tests: `node --test tests/`. This uses Node's built-in test runner and needs no installs.
 - Database self-check: Settings → "Run database self-check" (`#/settings/selfcheck`), or `http://localhost:8000/tests/browser/` on the PC. It round-trips every store and tests upgrades in scratch databases, in a real browser.
 - Browser checks: `node tools/browser/check.mjs`. Drives a headless Edge/Chrome at 375 px through the whole app: tabs, service worker and cache, self-check, backup export and import (with real files), the update banner, and offline use. It needs no installs, starts its own server, changes nothing in the repo, exits with 1 on failure, and prints a temp folder of light and dark screenshots. **Read the screenshots** (they are the visual check), and **add a check for each new feature** in the same style.
@@ -40,7 +40,7 @@ The full feature list and roadmap are in `SPEC.md`. Read it before starting any 
 - `tests/`: Node tests for `js/logic/`, plus `fixtures/` (one backup per schema version, kept forever).
 - `tests/browser/`: a standalone page running the same self-check on the PC. Not part of the app shell.
 - `tools/make_icons.py`: one-off icon generator (Python standard library only).
-- `tools/browser/`: the browser checks. `check.mjs` is the list of checks, `cdp.mjs` drives the headless browser (helpers: `goto`, `eval`, `waitFor`, `dark`, `pickFiles`, `screenshot`), `server.mjs` is a static server the checks can stop (offline) and that can serve `sw.js` with another version (update banner). Node built-ins only; not part of the app shell.
+- `tools/browser/`: the browser checks. `check.mjs` is the list of checks, `cdp.mjs` drives the headless browser (helpers: `goto`, `eval`, `waitFor`, `dark`, `pickFiles`, `screenshot`), `server.mjs` is a static server the checks can stop (offline) and that can serve `sw.js` with another version (update banner). Node built-ins only; not part of the app shell. The server must keep listening on `127.0.0.1` only and refusing hidden files.
 - `docs/DATA_MODEL.md`: stores, backup format, migrations, and decisions for later phases.
 
 ## Data safety rules (most important)
