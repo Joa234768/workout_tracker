@@ -421,6 +421,62 @@ input.input[type="date"] { width: 100%; -webkit-appearance: none; appearance: no
 .bar-before[style="width:0%"] + .bar-added { border-radius: 4px; }
 .bar-marker { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; background: var(--text); border-radius: 1px; }
 
+/* ---------- Muscle volume ---------- */
+
+.nums { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.bar-fill { background: var(--accent); border-radius: 4px; min-width: 0; }
+.bar.reached .bar-fill { background: var(--ok); }
+
+/* A whole bar row is one button on Progress. */
+.bar-row {
+  display: block;
+  width: 100%;
+  min-height: var(--tap);
+  padding: var(--s-2) 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.bar-row[aria-expanded="true"] .progress-head > :first-child { font-weight: 600; }
+.progress-list.tight, .progress-list:has(.bar-row) { gap: 0; }
+
+.group-detail { display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-3); border-radius: var(--radius-small); background: var(--surface-2); }
+.progress-list .group-detail { margin: var(--s-1) 0 var(--s-3); }
+.detail-row { display: flex; justify-content: space-between; align-items: baseline; gap: var(--s-3); }
+.detail-row a { min-width: 0; overflow-wrap: anywhere; padding: 6px 0; }
+
+.more summary { display: flex; align-items: center; min-height: var(--tap); color: var(--accent); font-weight: 600; cursor: pointer; list-style: none; }
+.more summary::-webkit-details-marker { display: none; }
+.more summary::after { content: '›'; margin-left: var(--s-2); transition: transform 0.15s; }
+.more[open] summary::after { transform: rotate(90deg); }
+
+/* Today: two columns of small bars. */
+.mini-bars { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-3) var(--s-4); font-size: 15px; }
+.mini-bars li { min-width: 0; }
+.mini-bars .progress-head { margin-bottom: 4px; }
+.mini-bars .bar { height: 6px; }
+
+/* The workout in progress: which muscles it has hit so far. */
+.session-muscles { display: flex; flex-wrap: wrap; gap: var(--s-2); }
+.session-muscles .tag { min-height: 28px; gap: 4px; }
+
+/* The body map. */
+.body-map { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-3); }
+.body-cell { display: flex; flex-direction: column; align-items: center; gap: var(--s-1); font-size: var(--fs-small); }
+.body-figure { width: 100%; max-width: 190px; height: auto; touch-action: manipulation; }
+.body-base { fill: var(--surface-2); stroke: var(--surface-2); stroke-linecap: round; }
+.body-region { fill: var(--accent); stroke: transparent; stroke-width: 3; cursor: pointer; outline: none; -webkit-tap-highlight-color: transparent; }
+.body-region.empty { fill: var(--muted); fill-opacity: 0.22; }
+.body-region.selected, .body-region:focus-visible { stroke: var(--text); stroke-width: 1; }
+
+/* A radio option with an explanation underneath. */
+.option { display: flex; align-items: flex-start; gap: var(--s-3); min-height: var(--tap); padding: var(--s-2) 0; cursor: pointer; }
+.option input { flex: none; width: 22px; height: 22px; margin: 1px 0 0; accent-color: var(--accent); }
+.option-text { display: flex; flex-direction: column; gap: 2px; }
+
 .delta { align-self: flex-start; font-size: var(--fs-small); font-weight: 600; color: var(--muted); }
 .delta.up { color: var(--ok); }
 .delta.down { color: var(--muted); }

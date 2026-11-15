@@ -79,3 +79,58 @@ test('weekProgress respects the counting mode and my targets', () => {
   const progress = weekProgress(thisWorkout, [], exercises, { mode: 'primary', targets: resolveTargets({ chest: 6 }) });
   assert.deepEqual(progress, [{ id: 'chest', label: 'Chest', added: 2, before: 0, after: 2, target: 6 }]);
 });
+
+import { muscleVolume, fillLevel, weekVolume, parseTarget, withTarget } from '../js/logic/volume.js';
+
+test('muscleVolume splits Back into lats and middle back', () => {
+  const w = workout([['Pullups', [set(), set()]], ['Row', [set()]]]);
+  assert.deepEqual(muscleVolume([w], exercises), { lats: 2.5, 'middle back': 2, biceps: 1.5, shoulders: 0.5 });
+  assert.deepEqual(muscleVolume([w], exercises, 'primary'), { lats: 2, 'middle back': 1 });
+});
+
+test('fillLevel: relative to the target, or to 10 without one, never above 1', () => {
+  assert.equal(fillLevel(0, 10), 0);
+  assert.equal(fillLevel(5, 10), 0.5);
+  assert.equal(fillLevel(30, 10), 1);
+  assert.equal(fillLevel(5, null), 0.5);
+  assert.equal(fillLevel(undefined, 10), 0);
+});
+
+test('weekVolume: every group in order, with targets, contributors and the Back split', () => {
+  const a = workout([['Bench', [set(), set(), set()]], ['Row', [set()]]]);
+  const b = workout([['Pullups', [set(), set()]], ['Bench', [set({ warmup: true }), set()]]]);
+  const week = weekVolume([a, b], exercises, { targets: resolveTargets({ chest: 8 }) });
+  assert.equal(week.length, 16);
+  assert.deepEqual(week.map((g) => g.id).slice(0, 3), ['chest', 'back', 'shoulders']);
+  const by = Object.fromEntries(week.map((g) => [g.id, g]));
+  assert.deepEqual(by.chest, { id: 'chest', label: 'Chest', sets: 4, target: 8, level: 0.5, exercises: [{ exerciseId: 'Bench', sets: 4 }], muscles: [] });
+  assert.equal(by.back.sets, 3);
+  assert.deepEqual(by.back.exercises, [{ exerciseId: 'Pullups', sets: 2 }, { exerciseId: 'Row', sets: 1 }]);
+  assert.deepEqual(by.back.muscles, [{ muscle: 'lats', sets: 2.5 }, { muscle: 'middle back', sets: 2 }]);
+  assert.deepEqual(by.shoulders.exercises, [{ exerciseId: 'Bench', sets: 2 }, { exerciseId: 'Row', sets: 0.5 }]);
+  assert.equal(by.neck.sets, 0);
+  assert.equal(by.neck.target, null);
+  assert.deepEqual(by.neck.exercises, []);
+  assert.equal(weekVolume([], exercises).every((g) => g.sets === 0 && g.level === 0), true);
+});
+
+test('parseTarget: empty is "no target", whole numbers 1–50, anything else invalid', () => {
+  assert.equal(parseTarget(''), null);
+  assert.equal(parseTarget('  '), null);
+  assert.equal(parseTarget('12'), 12);
+  assert.equal(parseTarget(' 50 '), 50);
+  assert.equal(parseTarget('0'), undefined);
+  assert.equal(parseTarget('51'), undefined);
+  assert.equal(parseTarget('7.5'), undefined);
+  assert.equal(parseTarget('abc'), undefined);
+});
+
+test('withTarget stores only what differs from the default', () => {
+  assert.deepEqual(withTarget({}, 'chest', 12), { chest: 12 });
+  assert.deepEqual(withTarget({ chest: 12 }, 'chest', 10), {});
+  assert.deepEqual(withTarget({}, 'chest', null), { chest: null });
+  assert.deepEqual(withTarget({ neck: 4 }, 'neck', null), {});
+  assert.deepEqual(withTarget(undefined, 'traps', 6), { traps: 6 });
+  assert.deepEqual(withTarget({ chest: 12 }, 'nonsense', 3), { chest: 12 });
+  assert.equal(resolveTargets(withTarget({}, 'back', null)).back, null);
+});

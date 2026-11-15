@@ -3,7 +3,7 @@
 // APP_VERSION is defined here and only here. Every release bumps it: the
 // browser detects an update by comparing this file byte for byte, and the
 // version names the cache. The Settings screen asks this worker for it.
-const APP_VERSION = '0.7.0';
+const APP_VERSION = '0.8.0';
 
 const CACHE_PREFIX = 'shell-v';
 const CACHE_NAME = `${CACHE_PREFIX}${APP_VERSION}`;
@@ -29,6 +29,7 @@ const PRECACHE = [
   './js/router.js',
   './js/selfcheck.js',
   './js/sw-client.js',
+  './js/volume.js',
   './js/workouts.js',
   './js/logic/backup.js',
   './js/logic/dates.js',
@@ -41,10 +42,12 @@ const PRECACHE = [
   './js/logic/volume.js',
   './js/logic/workout.js',
   './js/ui/banner.js',
+  './js/ui/body-map.js',
   './js/ui/chips.js',
   './js/ui/dialog.js',
   './js/ui/dom.js',
   './js/ui/export-button.js',
+  './js/ui/volume.js',
   './js/views/today.js',
   './js/views/calendar-month.js',
   './js/views/calendar.js',
@@ -59,6 +62,7 @@ const PRECACHE = [
   './js/views/exercises.js',
   './js/views/selfcheck.js',
   './js/views/settings.js',
+  './js/views/volume-settings.js',
   './js/views/workout-editor.js',
   './js/views/workout-summary.js',
   './js/views/workout.js',

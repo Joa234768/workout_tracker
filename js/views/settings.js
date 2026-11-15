@@ -7,6 +7,7 @@ import { SCHEMA_VERSION } from '../logic/schema.js';
 import { formatTimestampDate } from '../logic/dates.js';
 import { confirmDialog } from '../ui/dialog.js';
 import * as selfcheck from './selfcheck.js';
+import * as volumeSettings from './volume-settings.js';
 import { BackupError } from '../logic/backup.js';
 import {
   BACKUP_CHANGED, notifyBackupChanged, getBackupStatus,
@@ -33,6 +34,8 @@ const STORE_LABELS = [
 export function mount(container, params = {}) {
   // Sub-screen: #/settings/selfcheck
   if (params.segments && params.segments[0] === 'selfcheck') return selfcheck.mount(container);
+  // Sub-screen: #/settings/volume
+  if (params.segments && params.segments[0] === 'volume') return volumeSettings.mount(container);
 
   let alive = true;
 
@@ -196,7 +199,13 @@ export function mount(container, params = {}) {
     el('a', { class: 'btn secondary', href: '#/settings/selfcheck', text: 'Run database self-check' })
   );
 
-  container.append(backupCard, aboutCard);
+  const volumeCard = section(
+    'Muscle volume',
+    el('p', { class: 'muted', text: 'Weekly set targets per muscle group, and how sets are counted.' }),
+    el('a', { class: 'btn secondary', href: '#/settings/volume', text: 'Targets and counting' })
+  );
+
+  container.append(backupCard, volumeCard, aboutCard);
 
   refreshStatus().catch(showError);
   loadReminder().catch(showError);

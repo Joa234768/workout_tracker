@@ -51,13 +51,13 @@ Tick items off (`- [x]`) as they're completed. Build in phase order. Each phase 
 - [x] The Today screen shows today's planned workout with a big Start button (or "Rest day", with an option to start a workout anyway).
 
 ## Phase 4 — Muscle volume
-- [ ] **Weekly sets per muscle group** (Monday–Sunday), as progress bars toward a target. Counts only completed working sets.
-- [ ] **Fractional counting by default:** primary muscle = 1 set, secondary = 0.5. A setting switches to "primary only" or "all muscles = 1".
-- [ ] **Targets:** a **recommended baseline of 10 sets/week** for major muscle groups, shown as a marker on each bar. Each group's target is adjustable, and minor groups (e.g. forearms, neck, adductors/abductors) default to no target. The settings screen explains the baseline briefly (≈10 sets/week is a common starting point, research range ≈10–20).
-- [ ] Muscle groups: the dataset's 17 muscles, possibly merged into display groups (e.g. lats + middle back → "Back"). Propose a grouping in the plan.
-- [ ] **During a workout:** a compact indicator of which muscles this session is hitting, and how many sets so far.
-- [ ] **Body map, front and back:** an original, simplified SVG made for this project. Each region maps to dataset muscles and is coloured by this week's sets relative to target. Tapping a region shows its set count and the exercises that contributed.
-- [ ] Look back at previous weeks.
+- [x] **Weekly sets per muscle group** (Monday–Sunday), as progress bars toward a target. Counts only completed working sets.
+- [x] **Fractional counting by default:** primary muscle = 1 set, secondary = 0.5. A setting switches to "primary only" or "all muscles = 1".
+- [x] **Targets:** a **recommended baseline of 10 sets/week** for major muscle groups, shown as a marker on each bar. Each group's target is adjustable, and minor groups (e.g. forearms, neck, adductors/abductors) default to no target. The settings screen explains the baseline briefly (≈10 sets/week is a common starting point, research range ≈10–20).
+- [x] Muscle groups: the dataset's 17 muscles, possibly merged into display groups (e.g. lats + middle back → "Back"). Propose a grouping in the plan.
+- [x] **During a workout:** a compact indicator of which muscles this session is hitting, and how many sets so far.
+- [x] **Body map, front and back:** an original, simplified SVG made for this project. Each region maps to dataset muscles and is coloured by this week's sets relative to target. Tapping a region shows its set count and the exercises that contributed.
+- [x] Look back at previous weeks.
 
 ## Phase 5 — Progress and stats (Chart.js, vendored)
 - [ ] Per-exercise charts: **estimated 1RM** (best per session), **top set weight**, **volume** (kg × reps over working sets).

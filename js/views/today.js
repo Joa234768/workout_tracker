@@ -12,6 +12,8 @@ import { calendarDays, nextPlanned } from '../logic/plan.js';
 import { workoutStats } from '../logic/workout.js';
 import { formatDate, todayStr, weekdayName } from '../logic/dates.js';
 import { isDoneSet } from '../logic/sets.js';
+import { compactBars } from '../ui/volume.js';
+import { loadWeek } from '../volume.js';
 
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 
@@ -32,7 +34,7 @@ export function mount(container) {
   }
 
   async function refresh() {
-    const [data, library] = await Promise.all([loadPlanData(), getLibrary()]);
+    const [data, library, week] = await Promise.all([loadPlanData(), getLibrary(), loadWeek(todayStr())]);
     if (!alive) return;
     const today = todayStr();
     const dateLine = `${weekdayName(today)} ${formatDate(today)}`;
@@ -128,6 +130,16 @@ export function mount(container) {
       cards.push(el('p', { class: 'muted hint', text: `Next: ${weekdayName(next.date)} ${formatDate(next.date)}${routine ? ` · ${routine.name}` : ''}` }));
     } else if (!data.rules.length && !active) {
       cards.push(el('p', { class: 'muted hint' }, 'Plan your week under ', el('a', { href: '#/calendar/plan', text: 'Plan & routines' }), '.'));
+    }
+
+    // This week's sets per muscle group, compact. The details are on Progress.
+    if (week.groups.some((group) => group.target)) {
+      cards.push(
+        section('This week',
+          compactBars(week.groups),
+          el('a', { class: 'btn plain', href: '#/progress', text: 'Sets per muscle group ›' })
+        )
+      );
     }
 
     slot.replaceChildren(...cards);

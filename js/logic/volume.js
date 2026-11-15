@@ -91,3 +91,99 @@ export function weekProgress(workout, otherWorkouts, exerciseById, { mode = DEFA
     target: targets[group.id] ?? null,
   }));
 }
+
+/** Groups without a target are coloured as if their target were this. */
+export const BASELINE_TARGET = 10;
+export const MAX_TARGET = 50;
+
+/** { muscle: sets } — like totalVolume, but per dataset muscle (Back splits into lats and middle back). */
+export function muscleVolume(workouts, exerciseById, mode = DEFAULT_COUNTING_MODE) {
+  const weights = COUNTING_MODES[mode] || COUNTING_MODES[DEFAULT_COUNTING_MODE];
+  const totals = {};
+  for (const workout of workouts) {
+    for (const entry of workout.exercises || []) {
+      const exercise = exerciseById.get(entry.exerciseId);
+      if (!exercise) continue;
+      const sets = entry.sets.filter(isWorkingSet).length;
+      if (!sets) continue;
+      const perMuscle = {};
+      for (const muscle of exercise.secondaryMuscles || []) if (weights.secondary) perMuscle[muscle] = weights.secondary;
+      for (const muscle of exercise.primaryMuscles || []) perMuscle[muscle] = weights.primary;
+      for (const [muscle, weight] of Object.entries(perMuscle)) {
+        if (groupOfMuscle(muscle)) totals[muscle] = (totals[muscle] || 0) + weight * sets;
+      }
+    }
+  }
+  return totals;
+}
+
+/** How full a group is, 0…1: sets relative to its target (or to the baseline when it has none). */
+export function fillLevel(sets, target) {
+  if (!(sets > 0)) return 0;
+  return Math.min(1, sets / (target || BASELINE_TARGET));
+}
+
+/**
+ * Everything the weekly view shows, for every group in display order:
+ * [{ id, label, sets, target, level, exercises: [{ exerciseId, sets }], muscles: [{ muscle, sets }] }].
+ * `exercises` lists what contributed, most sets first; `muscles` is only
+ * filled for groups made of several muscles (Back).
+ */
+export function weekVolume(workouts, exerciseById, { mode = DEFAULT_COUNTING_MODE, targets = resolveTargets() } = {}) {
+  const totals = totalVolume(workouts, exerciseById, mode);
+  const perMuscle = muscleVolume(workouts, exerciseById, mode);
+  const contributions = {}; // groupId → Map(exerciseId → sets), in the order first trained
+  for (const workout of workouts) {
+    for (const entry of workout.exercises || []) {
+      const exercise = exerciseById.get(entry.exerciseId);
+      if (!exercise) continue;
+      const sets = entry.sets.filter(isWorkingSet).length;
+      if (!sets) continue;
+      for (const [groupId, weight] of Object.entries(groupWeights(exercise, mode))) {
+        const map = (contributions[groupId] ||= new Map());
+        map.set(entry.exerciseId, (map.get(entry.exerciseId) || 0) + weight * sets);
+      }
+    }
+  }
+  return MUSCLE_GROUPS.map((group) => {
+    const sets = totals[group.id] || 0;
+    const target = targets[group.id] ?? null;
+    return {
+      id: group.id,
+      label: group.label,
+      sets,
+      target,
+      level: fillLevel(sets, target),
+      exercises: [...(contributions[group.id] || [])]
+        .map(([exerciseId, n]) => ({ exerciseId, sets: n }))
+        .sort((a, b) => b.sets - a.sets),
+      muscles: group.muscles.length > 1 ? group.muscles.map((muscle) => ({ muscle, sets: perMuscle[muscle] || 0 })) : [],
+    };
+  });
+}
+
+/**
+ * What a typed target means: '' → null (no target), a whole number from 1 to
+ * MAX_TARGET → that number, anything else → undefined (invalid).
+ */
+export function parseTarget(text) {
+  const trimmed = String(text ?? '').trim();
+  if (trimmed === '') return null;
+  if (!/^\d+$/.test(trimmed)) return undefined;
+  const value = Number(trimmed);
+  return value >= 1 && value <= MAX_TARGET ? value : undefined;
+}
+
+/**
+ * The stored `muscleTargets` after setting one group. Only what differs from
+ * the group's default is kept, so later changes to the defaults still reach
+ * the groups I never touched.
+ */
+export function withTarget(stored, groupId, value) {
+  const next = { ...(stored || {}) };
+  const group = MUSCLE_GROUPS.find((g) => g.id === groupId);
+  if (!group) return next;
+  if (value === group.defaultTarget) delete next[groupId];
+  else next[groupId] = value;
+  return next;
+}

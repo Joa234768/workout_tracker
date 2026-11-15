@@ -15,6 +15,9 @@ import {
 } from '../logic/workout.js';
 import { formatKg, formatSetCompact, parseKg, parseReps, isDoneSet } from '../logic/sets.js';
 import { formatDate, formatShortDate, isValidDateStr, todayStr, weekdayName } from '../logic/dates.js';
+import { MUSCLE_GROUPS } from '../logic/muscles.js';
+import { workoutVolume } from '../logic/volume.js';
+import { getVolumeSettings } from '../volume.js';
 
 const MAX_DURATION_MIN = 600;
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
@@ -28,7 +31,21 @@ export function mountEditor(container, { workout, mode, basePath }) {
   let alive = true;
   let exerciseById = new Map();
   let allWorkouts = [];
+  let countingMode;
   const cards = el('div', { class: 'stack-lg' });
+
+  // ----- Which muscles this session has hit so far, and with how many sets -----
+  const muscles = el('div', { class: 'session-muscles', role: 'status', 'aria-label': 'Sets per muscle group in this workout', hidden: true });
+  function renderMuscles() {
+    const volume = workoutVolume(workout, exerciseById, countingMode);
+    const hit = MUSCLE_GROUPS.filter((group) => volume[group.id] > 0);
+    muscles.hidden = !hit.length;
+    muscles.replaceChildren(
+      ...hit.map((group) =>
+        el('span', { class: 'tag', dataset: { group: group.id } }, `${group.label} `, el('strong', { text: formatKg(volume[group.id]) }))
+      )
+    );
+  }
 
   // ----- Saving: every change is written; writes never overlap -----
   let saving = false;
@@ -36,6 +53,7 @@ export function mountEditor(container, { workout, mode, basePath }) {
   let idle = Promise.resolve();
   function save() {
     dirty = true;
+    renderMuscles();
     if (saving) return idle;
     saving = true;
     idle = (async () => {
@@ -383,16 +401,18 @@ export function mountEditor(container, { workout, mode, basePath }) {
       ? el('button', { class: 'btn plain danger-text', type: 'button', text: 'Discard workout', onclick: discard })
       : null
   );
-  container.append(heading, cards, actions);
+  container.append(heading, muscles, cards, actions);
 
   // Exercise names and "last time" need the library and the other workouts.
   renderCards();
-  Promise.all([getLibrary(), getAllWorkouts()])
-    .then(([library, workouts]) => {
+  Promise.all([getLibrary(), getAllWorkouts(), getVolumeSettings()])
+    .then(([library, workouts, settings]) => {
       if (!alive) return;
+      countingMode = settings.mode;
       exerciseById = new Map(library.map((exercise) => [exercise.id, exercise]));
       allWorkouts = workouts;
       renderCards();
+      renderMuscles();
       const scrollTo = takePendingScroll();
       if (scrollTo) cards.querySelector(`[data-entry="${scrollTo}"]`)?.scrollIntoView({ block: 'start' });
     })

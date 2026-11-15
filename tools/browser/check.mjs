@@ -23,8 +23,8 @@ import { fileURLToPath } from 'node:url';
 import { launch } from './cdp.mjs';
 import { createStaticServer } from './server.mjs';
 import { mergeExercises, filterExercises } from '../../js/logic/exercises.js';
-import { addDays, addMonths, formatDate, formatShortDate, monthGrid, monthLabel, todayStr, weekdayName } from '../../js/logic/dates.js';
-import { weekProgress, resolveTargets } from '../../js/logic/volume.js';
+import { addDays, addMonths, formatDate, formatShortDate, isoWeekday, monthGrid, monthLabel, todayStr, weekdayName } from '../../js/logic/dates.js';
+import { weekProgress, weekVolume, resolveTargets } from '../../js/logic/volume.js';
 import { formatKg } from '../../js/logic/sets.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -1153,6 +1153,202 @@ async function run() {
     equal(await page.eval(`document.querySelectorAll('.day:not(.outside) .mark.planned').length`),
       monthGrid(far).filter((d) => d.inMonth && [1, 3, 5].includes(wd(d.date))).length, 'planned days a year ahead');
     await pressButton('Today');
+  });
+
+  // ----- Phase 4: muscle volume -----
+  // These checks make their own workouts: one today, one a week ago.
+  const SQUAT = 'Barbell_Squat';
+  const fullLibrary = new Map(mergeExercises(dataset, [], []).map((e) => [e.id, e]));
+  const doneSet = (extra = {}) => ({ kg: 40, reps: 10, warmup: false, done: true, doneAt: null, ...extra });
+  const volumeWorkout = (id, date, entries) => ({
+    id, status: 'completed', date, startedAt: `${date}T10:00:00.000Z`, finishedAt: `${date}T11:00:00.000Z`, durationMin: null,
+    notes: '', routineId: null, routineName: null, plannedRef: null,
+    exercises: entries.map(([exerciseId, sets], i) => ({ id: `${id}-e${i}`, exerciseId, repMin: 8, repMax: 12, sets: sets.map((s, n) => ({ ...s, id: `${id}-e${i}-s${n}` })) })),
+    createdAt: `${date}T10:00:00.000Z`, updatedAt: `${date}T11:00:00.000Z`,
+  });
+  const thisWeekWorkout = volumeWorkout('volume-this-week', today, [
+    [BENCH, [doneSet({ warmup: true }), doneSet(), doneSet(), doneSet()]],
+    ['Pullups', [doneSet({ kg: 0 }), doneSet({ kg: 0 })]],
+  ]);
+  const lastWeekWorkout = volumeWorkout('volume-last-week', lastWeek, [[SQUAT, [doneSet(), doneSet(), doneSet(), doneSet()]]]);
+  const setsText = (g) => (g.target ? `${formatKg(g.sets)} / ${formatKg(g.target)}` : formatKg(g.sets));
+  const barRows = (scope) =>
+    page.eval(`[...document.querySelectorAll(${js(`${scope} .bar-row`)})].map((b) => [b.dataset.group, ...[...b.querySelector('.progress-head').children].map((c) => c.textContent)])`);
+  const WITH_TARGET = '.card > .progress-list';
+  const expectedRows = (groups) => groups.map((g) => [g.id, g.label, setsText(g)]);
+  const targeted = (groups) => groups.filter((g) => g.target);
+  const tapRegion = (selector) => page.eval(`document.querySelector(${js(selector)}).dispatchEvent(new MouseEvent('click', { bubbles: true }))`);
+  const detailText = (scope) => page.eval(`[...document.querySelector(${js(scope)}).querySelectorAll('p, li')].map((n) => n.textContent)`);
+  const openProgress = async () => {
+    await openApp('#/progress');
+    await page.waitFor(`document.querySelectorAll('.bar-row').length > 0`, { what: 'the muscle bars' });
+  };
+
+  await check('Progress: sets per muscle group this week, the body map, and earlier weeks', async () => {
+    await dbCall(`
+      for (const workout of await db.getAll('workouts')) await db.remove('workouts', workout.id);
+      await db.saveWorkout(${js(thisWeekWorkout)});
+      await db.saveWorkout(${js(lastWeekWorkout)});`);
+    // The fixture's settings still apply: main muscle only, chest target 12, no neck target.
+    const options = { mode: 'primary', targets: resolveTargets({ chest: 12, neck: null }) };
+    const now = weekVolume([thisWeekWorkout], fullLibrary, options);
+    const before = weekVolume([lastWeekWorkout], fullLibrary, options);
+    equal(now.filter((g) => g.sets).map((g) => [g.id, g.sets]), [['chest', 3], ['back', 2]], 'expected sets this week (the warm-up is not counted)');
+
+    await openProgress();
+    equal(await text('.month-title'), 'This week', 'week title');
+    expect(await page.eval(`document.querySelector('[aria-label="Next week"]').disabled`), 'the next week can be opened from this week');
+    equal(await barRows(WITH_TARGET), expectedRows(targeted(now)), 'bars of the groups with a target');
+    equal(await barRows('.more'), expectedRows(now.filter((g) => !g.target)), 'groups without a target');
+    equal(await page.eval(`document.querySelectorAll('.bar-row .bar-marker').length`), targeted(now).length, 'target markers');
+    expect(!(await page.eval(`document.querySelector('.more').open`)), 'the groups without a target are open although none has sets');
+
+    // The body map: regions coloured by sets relative to target; tapping one shows what counted.
+    equal(await page.eval(`document.querySelectorAll('.body-figure').length`), 2, 'front and back figures');
+    equal(await page.eval(`[...new Set([...document.querySelectorAll('.body-region')].map((r) => r.dataset.group))].sort()`),
+      now.map((g) => g.id).sort(), 'every muscle group is on the body map');
+    equal(await page.eval(`[...new Set([...document.querySelectorAll('.body-region:not(.empty)')].map((r) => r.dataset.group))].sort()`),
+      ['back', 'chest'], 'coloured regions');
+    equal(await page.eval(`document.querySelector('.body-region[data-group=chest]').style.fillOpacity`), String(Number((0.25 + 0.75 * (3 / 12)).toFixed(2))), 'chest colour strength (3 of 12)');
+    await shot('progress-light');
+    await page.eval(`document.querySelector('.card > .progress-list').scrollIntoView({ block: 'start' }); window.scrollBy(0, -80)`);
+    await shot('progress-bars-light');
+    await page.dark(true);
+    await shot('progress-bars-dark');
+    await page.dark(false);
+    await page.eval(`window.scrollTo(0, 0)`);
+    await tapRegion('.body-region[data-group=chest]');
+    await page.waitFor(`document.querySelector('.card > [data-detail=chest]')`, { what: 'the chest details under the body map' });
+    equal(await detailText('.card > [data-detail=chest]'), ['Chest · 3 / 12 sets', 'Barbell Bench Press - Medium Grip3 sets'], 'chest details');
+    expect(await page.eval(`document.querySelector('.body-region[data-group=chest]').classList.contains('selected')`), 'the tapped region is not marked');
+    equal(await page.eval(`document.querySelector('.bar-row[data-group=chest]').getAttribute('aria-expanded')`), 'true', 'the chest bar is opened too');
+
+    await click('.bar-row[data-group=back]');
+    await page.waitFor(`document.querySelector('li > [data-detail=back]')`, { what: 'the back details under its bar' });
+    equal(await detailText('li > [data-detail=back]'), ['Back · 2 / 10 sets', 'Lats 2 · Middle back 0', 'Pullups2 sets'], 'back details, split into lats and middle back');
+    expect(!(await page.eval(`!!document.querySelector('[data-detail=chest]')`)), 'the chest details stayed open');
+    await noSidewaysScroll();
+    await shot('progress-detail-light');
+    await page.dark(true);
+    await shot('progress-detail-dark');
+    await page.dark(false);
+    await click('.bar-row[data-group=back]');
+    await page.waitFor(`!document.querySelector('[data-detail]')`, { what: 'the details to close on a second tap' });
+
+    // Earlier weeks.
+    await click('[aria-label="Previous week"]');
+    await page.waitFor(`document.querySelector('.month-title').textContent === 'Last week' && document.querySelector('.bar-row[data-group=quads] .nums')?.textContent === '4 / 10'`, { what: 'last week' });
+    equal(await barRows(WITH_TARGET), expectedRows(targeted(before)), 'bars last week');
+    equal(await text('.month-legend .muted'), `${formatDate(addDays(lastWeek, 1 - isoWeekday(lastWeek)))} – ${formatDate(addDays(lastWeek, 7 - isoWeekday(lastWeek)))}`, 'the week shown as Monday – Sunday');
+    await click('[aria-label="Previous week"]');
+    await page.waitFor(`document.querySelector('.month-title').textContent.startsWith('Week of ') && document.querySelector('.bar-row[data-group=quads] .nums')?.textContent === '0 / 10'`, { what: 'the week before, empty' });
+    await pressButton('This week');
+    await page.waitFor(`document.querySelector('.month-title').textContent === 'This week' && document.querySelector('.bar-row[data-group=chest] .nums')?.textContent === '3 / 12'`, { what: 'back to this week' });
+  });
+
+  await check('Targets and counting: saved, validated, and used by Progress and Today', async () => {
+    await goTo('#/settings', `document.querySelector('main a.btn[href="#/settings/volume"]')`, 'Settings');
+    await click('main a.btn[href="#/settings/volume"]');
+    await page.waitFor(`document.getElementById('target-chest')`, { what: 'the targets screen' });
+    expect(!(await page.eval(`document.getElementById('back-button').hidden`)), 'no back arrow on the targets screen');
+    equal(await page.eval(`document.querySelector('input[name=counting]:checked').value`), 'primary', 'counting mode from the backup');
+    const targetValues = () => page.eval(`Object.fromEntries([...document.querySelectorAll('input[id^=target-]')].map((i) => [i.id.slice(7), i.value]))`);
+    const defaults = Object.fromEntries(Object.entries(resolveTargets()).map(([id, t]) => [id, t === null ? '' : String(t)]));
+    equal(await targetValues(), { ...defaults, chest: '12' }, 'targets shown');
+    await noSidewaysScroll();
+    await shot('volume-settings-light');
+    await page.dark(true);
+    await shot('volume-settings-dark');
+    await page.dark(false);
+    await page.eval(`document.querySelector('#target-chest').scrollIntoView({ block: 'start' }); window.scrollBy(0, -80)`);
+    await shot('volume-targets-light');
+    expect(await page.eval(`[...document.querySelectorAll('input[id^=target-]')].every((i) => parseFloat(getComputedStyle(i).fontSize) >= 16)`), 'a target field is smaller than 16 px (iOS would zoom)');
+
+    const setTargetField = (group, value) =>
+      page.eval(`(() => { const i = document.getElementById('target-${group}'); i.value = ${js(value)}; i.dispatchEvent(new Event('input')); i.dispatchEvent(new Event('change')); })()`);
+    const storedTargets = () => dbCall(`return db.getSetting('muscleTargets');`);
+    await page.eval(`document.querySelector('input[name=counting][value=fractional]').click()`);
+    await waitToast('Counting changed.');
+    equal(await dbCall(`return db.getSetting('volumeCounting');`), 'fractional', 'stored counting mode');
+    await setTargetField('chest', '8');
+    await page.sleep(100);
+    await setTargetField('traps', '6');
+    await page.sleep(100);
+    await setTargetField('calves', '');
+    await page.sleep(100);
+    await setTargetField('back', '7.5');
+    await waitToast('Enter a whole number from 1 to 50, or leave it empty for no target.');
+    equal(await page.eval(`document.getElementById('target-back').value`), '10', 'an invalid target is put back');
+    await setTargetField('quads', '0');
+    equal(await page.eval(`document.getElementById('target-quads').value`), '10', 'a target of 0 is put back');
+    equal(await storedTargets(), { chest: 8, neck: null, traps: 6, calves: null }, 'stored targets: only what differs from the defaults');
+
+    const options = { mode: 'fractional', targets: resolveTargets({ chest: 8, neck: null, traps: 6, calves: null }) };
+    const now = weekVolume([thisWeekWorkout], fullLibrary, options);
+    equal(now.find((g) => g.id === 'biceps').sets, 1, 'pull-ups now count ½ each for biceps');
+    await openProgress();
+    equal(await barRows(WITH_TARGET), expectedRows(targeted(now)), 'bars with the new counting and targets (traps in, calves out)');
+    equal(await barRows('.more'), expectedRows(now.filter((g) => !g.target)), 'groups without a target');
+    await page.eval(`document.querySelector('.card > .progress-list').scrollIntoView({ block: 'start' }); window.scrollBy(0, -80)`);
+    await shot('progress-fractional');
+
+    // Today shows the same numbers, compact.
+    await goTo('#/today', `document.querySelectorAll('.mini-bars li').length > 0`, 'this week on Today');
+    equal(await page.eval(`[...document.querySelectorAll('.mini-bars li')].map((li) => [li.dataset.group, ...[...li.querySelector('.progress-head').children].map((c) => c.textContent)])`),
+      expectedRows(targeted(now)), 'the compact bars on Today');
+    await noSidewaysScroll();
+    await page.eval(`document.querySelector('.mini-bars').scrollIntoView({ block: 'start' }); window.scrollBy(0, -80)`);
+    await shot('today-week-light');
+    await page.dark(true);
+    await shot('today-week-dark');
+    await page.dark(false);
+
+    // The settings survive a reload; then back to the defaults.
+    await openApp('#/settings/volume');
+    await page.waitFor(`document.getElementById('target-chest')?.value === '8'`, { what: 'the saved target after a reload' });
+    equal(await page.eval(`document.querySelector('input[name=counting]:checked').value`), 'fractional', 'counting mode after a reload');
+    await pressButton('Reset targets to the defaults');
+    await page.waitFor(DIALOG, { what: 'the reset confirmation' });
+    await pressInDialog('Reset');
+    await page.waitFor(`document.getElementById('target-chest')?.value === '10'`, { what: 'the default targets' });
+    equal(await targetValues(), defaults, 'targets after the reset');
+    equal(await storedTargets(), {}, 'stored targets after the reset');
+  });
+
+  await check('During a workout: the muscles hit so far, counted as sets are ticked', async () => {
+    await goTo('#/today', `document.querySelector('.mini-bars')`, 'Today');
+    await startFromToday('Start another workout', 'Empty workout');
+    expect(await page.eval(`document.querySelector('.session-muscles').hidden`), 'the muscle line shows before anything is ticked');
+    await pickExercise('medium grip', 'Barbell Bench Press - Medium Grip');
+    const sessionTags = () => page.eval(`[...document.querySelectorAll('.session-muscles .tag')].map((t) => t.textContent)`);
+    await typeField(0, 0, 0, '40');
+    await typeField(0, 0, 1, '10');
+    expect(await page.eval(`document.querySelector('.session-muscles').hidden`), 'an unticked row is counted');
+    await tapTick(0, 0);
+    await page.waitFor(`!document.querySelector('.session-muscles').hidden`, { what: 'the muscles of this session' });
+    equal(await sessionTags(), ['Chest 1', 'Shoulders 0.5', 'Triceps 0.5'], 'after one set of bench press');
+    await typeField(0, 1, 0, '40');
+    await typeField(0, 1, 1, '9');
+    await tapTick(0, 1);
+    await page.waitFor(`document.querySelector('.session-muscles .tag strong').textContent === '2'`, { what: 'two sets counted' });
+    equal(await sessionTags(), ['Chest 2', 'Shoulders 1', 'Triceps 1'], 'after two sets');
+    await noSidewaysScroll();
+    await shot('workout-muscles-light');
+    await page.dark(true);
+    await shot('workout-muscles-dark');
+    await page.dark(false);
+    await tapBadge(0, 1); // a warm-up does not count
+    await page.waitFor(`document.querySelector('.session-muscles .tag strong').textContent === '1'`, { what: 'the warm-up to stop counting' });
+
+    // The workout in progress already counts toward the week.
+    await goTo('#/progress', `document.querySelector('.bar-row[data-group=chest] .nums')?.textContent === '4 / 10'`, 'this week including the workout in progress');
+    expect(await page.eval(`document.querySelector('main').textContent.includes('1 workout finished, plus the one in progress')`), 'the workout in progress is not mentioned');
+
+    await goTo('#/workout', `document.querySelector('[data-entry]')`, 'the workout');
+    await pressButton('Discard workout');
+    await page.waitFor(DIALOG, { what: 'the discard confirmation' });
+    await pressInDialog('Discard workout');
+    await page.waitFor(`location.hash === '#/today' && document.querySelector('.mini-bars li[data-group=chest] .nums')?.textContent === '3 / 10'`, { what: 'Today after discarding' });
   });
 
   await check('Update: a new version shows the banner, and tapping it loads the new version', async () => {

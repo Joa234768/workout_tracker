@@ -226,7 +226,16 @@ A **working set** is a set with `done === true`, `warmup === false` and `reps > 
 16 display groups from the dataset's 17 muscles; only lats and middle back merge into **Back**.
 
 - Default target 10 sets/week: Chest, Back, Shoulders, Biceps, Triceps, Quads, Hamstrings, Glutes, Abs, Calves, Lower back.
-- No default target: Traps, Forearms, Adductors, Abductors, Neck (shown under "More"; giving one a target promotes it).
+- No default target: Traps, Forearms, Adductors, Abductors, Neck (shown under "Without a target" on Progress; giving one a target moves it up among the bars and onto Today).
+
+How it is stored and shown (all in the existing `settings` store; no schema change):
+
+- `volumeCounting`: `'fractional'`, `'primary'` or `'all'`. An unknown value is treated as `'fractional'`.
+- `muscleTargets`: `{ groupId: number | null }`, holding **only the groups that differ from their default** (`null` = no target). Resetting stores `{}`. A later change to the defaults therefore reaches every group I never touched. Targets are whole numbers from 1 to 50.
+- A week is Monday–Sunday by the workouts' `date`. The workout in progress counts as soon as a set is ticked.
+- Bars: the target marker sits two thirds along, and the bar is full at 1.5 × the target, so going past the target still shows. A bar turns green once the target is reached.
+- Body map: every region is coloured by its group's sets ÷ target (÷ 10 for groups without a target), capped at full. Lats and middle back are separate regions with the same colour (the Back group's); the detail line splits them. Tapping a region or a bar shows the group's sets and the exercises that counted.
+- Changing the counting mode or the muscle tags of an exercise recounts earlier weeks too: nothing about volume is stored.
 
 ## Workout summary
 

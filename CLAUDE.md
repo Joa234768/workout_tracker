@@ -33,10 +33,12 @@ The full feature list and roadmap are in `SPEC.md`. Read it before starting any 
 - `js/backup.js`: backup export/import orchestration (share sheet, files).
 - `js/workouts.js`: workouts' data access (start, save on every change, finish, list, delete).
 - `js/plan.js`: routines and the calendar plan (weekly plan versions, single-day changes, one-off workouts).
+- `js/volume.js`: muscle volume's data access (a week's sets per muscle group, the counting mode and targets in `settings`).
 - `js/exercises.js`: the exercise library's data access (loads `data/exercises.json`, merges it with my custom exercises and overrides, saves my changes).
-- `js/ui/`: small DOM helpers (`el()`, banner/toast, confirm dialog, export button, chips and the muscle picker).
+- `js/ui/`: small DOM helpers (`el()`, banner/toast, confirm dialog, export button, chips and the muscle picker, the weekly volume bars in `volume.js`, and the body map in `body-map.js`: an original SVG whose shapes are listed as data at the top of the file).
 - `js/views/`: one module per screen, each exporting `mount(container, params)` that returns a cleanup function. Sub-screens are routes inside the app (e.g. `#/settings/selfcheck`), never separate HTML pages: the installed app must not navigate away from `index.html`.
 - `js/selfcheck.js`: the database self-check, shown by `js/views/selfcheck.js`.
+- The Progress tab (`#/progress`) currently shows muscle volume per week; Phase 5 adds charts and body weight beside it. Targets and the counting mode are edited at `#/settings/volume`.
 - Screens outside the five tabs: `#/workout` (the workout in progress, under the Today tab). Under the Calendar tab: the month view (`#/calendar`), the history list (`#/calendar/history`), plan and routines (`#/calendar/plan`, `#/calendar/routines/<id>`), and workout summaries and editing (`#/calendar/<workoutId>`). The full list is at the top of `js/views/calendar.js`. `js/views/workout-editor.js` is shared by the workout in progress and editing a past workout.
 - `js/logic/`: pure functions with no DOM and no IndexedDB (`dates.js`, `schema.js`, `backup.js`, `muscles.js`, `exercises.js`, `sets.js`, `workout.js`, `volume.js`, `routines.js`, `plan.js`; later e1RM, progression, warm-up sets). `plan.js` computes every calendar day from the plan rules; nothing is pre-generated. `sets.js` defines what a working set is and how weights are written; use it everywhere.
 - `data/exercises.json`: a vendored, unmodified copy of free-exercise-db (public domain / Unlicense). The source commit, checksum and update steps are in `data/README.md`. Never edit it by hand.
