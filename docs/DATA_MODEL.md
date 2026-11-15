@@ -207,8 +207,8 @@ A **working set** is a set with `done === true`, `warmup === false` and `reps > 
 
 16 display groups from the dataset's 17 muscles; only lats and middle back merge into **Back**.
 
-- Default target 10 sets/week: Chest, Back, Shoulders, Biceps, Triceps, Quads, Hamstrings, Glutes, Abs, Calves.
-- No default target: Traps, Lower back, Forearms, Adductors, Abductors, Neck (shown under "More"; giving one a target promotes it).
+- Default target 10 sets/week: Chest, Back, Shoulders, Biceps, Triceps, Quads, Hamstrings, Glutes, Abs, Calves, Lower back.
+- No default target: Traps, Forearms, Adductors, Abductors, Neck (shown under "More"; giving one a target promotes it).
 
 ## Workout summary
 

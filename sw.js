@@ -3,7 +3,7 @@
 // APP_VERSION is defined here and only here. Every release bumps it: the
 // browser detects an update by comparing this file byte for byte, and the
 // version names the cache. The Settings screen asks this worker for it.
-const APP_VERSION = '0.6.0';
+const APP_VERSION = '0.6.1';
 
 const CACHE_PREFIX = 'shell-v';
 const CACHE_NAME = `${CACHE_PREFIX}${APP_VERSION}`;

@@ -50,6 +50,7 @@ test('resolveTargets: defaults, my numbers, and "no target"', () => {
   assert.equal(defaults.chest, 10);
   assert.equal(defaults.abs, 10);
   assert.equal(defaults.calves, 10);
+  assert.equal(defaults.lowerBack, 10);
   assert.equal(defaults.neck, null);
   assert.equal(defaults.traps, null);
   const mine = resolveTargets({ chest: 12, neck: 4, back: null, quads: 0, glutes: 'lots' });
@@ -68,7 +69,7 @@ test('weekProgress: what this workout added, on top of the rest of the week', ()
   assert.deepEqual(progress.map((p) => p.id), ['chest', 'shoulders', 'triceps', 'quads', 'hamstrings', 'glutes', 'calves', 'lowerBack']);
   assert.deepEqual(progress[0], { id: 'chest', label: 'Chest', added: 3, before: 2, after: 5, target: 10 });
   assert.deepEqual(progress[1], { id: 'shoulders', label: 'Shoulders', added: 1.5, before: 1, after: 2.5, target: 10 });
-  assert.deepEqual(progress.at(-1), { id: 'lowerBack', label: 'Lower back', added: 0.5, before: 0, after: 0.5, target: null });
+  assert.deepEqual(progress.at(-1), { id: 'lowerBack', label: 'Lower back', added: 0.5, before: 0, after: 0.5, target: 10 });
   // Back was trained earlier this week but not in this workout: not listed.
   assert.ok(!progress.some((p) => p.id === 'back'));
 });

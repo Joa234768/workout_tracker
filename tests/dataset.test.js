@@ -67,7 +67,9 @@ test('every muscle belongs to exactly one display group', () => {
   assert.equal(groupOfMuscle('lower back').id, 'lowerBack');
   assert.equal(groupOfMuscle('unknown'), null);
   assert.deepEqual(MUSCLE_GROUPS.filter((g) => g.defaultTarget === 10).map((g) => g.id),
-    ['chest', 'back', 'shoulders', 'biceps', 'triceps', 'quads', 'hamstrings', 'glutes', 'abs', 'calves']);
+    ['chest', 'back', 'shoulders', 'biceps', 'triceps', 'quads', 'hamstrings', 'glutes', 'abs', 'calves', 'lowerBack']);
+  assert.deepEqual(MUSCLE_GROUPS.filter((g) => g.defaultTarget === null).map((g) => g.id),
+    ['traps', 'forearms', 'adductors', 'abductors', 'neck']);
 });
 
 test('the whole dataset merges into the library', () => {
