@@ -4,8 +4,10 @@ import { el, section } from '../ui/dom.js';
 import { tag } from '../ui/chips.js';
 import { toast } from '../ui/banner.js';
 import { confirmDialog } from '../ui/dialog.js';
-import { getExercise, getExerciseHistory, setFavourite, deleteCustomExercise } from '../exercises.js';
-import { equipmentLabel } from '../logic/exercises.js';
+import { getExercise, getExerciseHistory, setFavourite, setIncrement, deleteCustomExercise } from '../exercises.js';
+import { DEFAULT_INCREMENT, MAX_INCREMENT, parseIncrement } from '../logic/helpers.js';
+import { formatKg } from '../logic/sets.js';
+import { equipmentLabel, imageUrl } from '../logic/exercises.js';
 import { muscleLabel } from '../logic/muscles.js';
 import { formatDate } from '../logic/dates.js';
 import { formatSet } from '../logic/sets.js';
@@ -54,6 +56,29 @@ export function mount(container, { id }) {
       star
     );
 
+    // ----- Photos (built-in exercises). Each is downloaded the first time
+    // the exercise is opened, then kept on the phone. A photo that cannot be
+    // loaded (offline and never opened before) is left out without a fuss.
+    let photos = null;
+    if (exercise.images.length) {
+      photos = el('div', { class: 'photos' });
+      exercise.images.slice(0, 2).forEach((path, i) => {
+        const img = el('img', {
+          class: 'photo',
+          alt: `${exercise.name}, ${i === 0 ? 'start' : 'end'} position`,
+          width: '640',
+          height: '427',
+          decoding: 'async',
+        });
+        img.addEventListener('error', () => {
+          img.remove();
+          if (!photos.children.length) photos.remove();
+        });
+        img.src = imageUrl(path);
+        photos.append(img);
+      });
+    }
+
     // ----- Muscles -----
     const muscles = section('Muscles',
       el('h3', { class: 'field-label', text: 'Primary' }),
@@ -75,6 +100,44 @@ export function mount(container, { id }) {
           : el('p', { class: 'muted', text: 'No instructions for this exercise.' })
       );
     }
+
+    // ----- Progression: the weight step for this exercise -----
+    let savedStep = exercise.increment ?? DEFAULT_INCREMENT;
+    const step = el('input', {
+      class: 'input short',
+      id: 'weight-step',
+      type: 'text',
+      inputmode: 'decimal',
+      autocomplete: 'off',
+      enterkeyhint: 'done',
+      value: formatKg(savedStep),
+    });
+    step.addEventListener('change', async () => {
+      const kg = parseIncrement(step.value);
+      if (kg === null) {
+        step.value = formatKg(savedStep);
+        toast(`Enter a step above 0 and up to ${MAX_INCREMENT} kg.`);
+        return;
+      }
+      step.value = formatKg(kg);
+      if (kg === savedStep) return;
+      try {
+        await setIncrement(exercise.id, kg);
+        savedStep = kg;
+        toast('Weight step saved.');
+      } catch (err) {
+        console.error(err);
+        step.value = formatKg(savedStep);
+        toast('The weight step could not be saved.');
+      }
+    });
+    step.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') step.blur();
+    });
+    const progression = section('Progression',
+      el('div', { class: 'row' }, el('label', { for: 'weight-step', text: 'Weight step (kg)' }), step),
+      el('p', { class: 'muted', text: 'When every set reaches the top of the rep range, the workout screen suggests adding this much.' })
+    );
 
     // ----- My history -----
     const historyCard = section('My history',
@@ -124,7 +187,7 @@ export function mount(container, { id }) {
       manage = section(null, el('a', { class: 'btn secondary', href: `${path}/edit`, text: 'Edit exercise' }), remove);
     }
 
-    container.replaceChildren(...[header, muscles, instructions, historyCard, manage].filter(Boolean));
+    container.replaceChildren(...[header, photos, muscles, instructions, progression, historyCard, manage].filter(Boolean));
   }
 
   container.append(el('p', { class: 'muted', text: 'Loading…' }));

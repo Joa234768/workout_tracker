@@ -4,7 +4,9 @@
 import { db } from './db.js';
 import { getAppVersion } from './sw-client.js';
 import { SCHEMA_VERSION } from './logic/schema.js';
-import { formatTimestampDate } from './logic/dates.js';
+import { formatTimestampDate, todayStr } from './logic/dates.js';
+import { buildSetsCsv, csvFilename } from './logic/helpers.js';
+import { getLibrary } from './exercises.js';
 import { notifyWorkoutChanged } from './workouts.js';
 import {
   buildBackup, backupFilename, backupStatus, parseBackup, prepareImport, summarizeBackup,
@@ -80,6 +82,17 @@ export async function importBackup(checked) {
   notifyBackupChanged();
   notifyWorkoutChanged(); // the workout in progress may have appeared or gone
   window.dispatchEvent(new Event('plan-changed'));
+}
+
+/** Every ticked set of every finished workout as a CSV file. Null when there is nothing to export. */
+export async function prepareCsvFile() {
+  const [workouts, library] = await Promise.all([db.getAll('workouts'), getLibrary()]);
+  if (!workouts.some((workout) => workout.status === 'completed')) return null;
+  const names = new Map(library.map((exercise) => [exercise.id, exercise.name]));
+  const csv = buildSetsCsv(workouts, (id) => names.get(id) || id);
+  // The leading mark makes spreadsheets read the file as UTF-8 (æ, ø, å).
+  const file = new File(['\ufeff', csv], csvFilename(todayStr()), { type: 'text/csv' });
+  return { file, exportedAt: null, countsAsBackup: false };
 }
 
 function download(file) {

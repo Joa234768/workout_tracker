@@ -64,3 +64,11 @@ test('APP_VERSION is a semantic version defined once', () => {
   const matches = [...sw.matchAll(/const APP_VERSION = '(\d+\.\d+\.\d+)';/g)];
   assert.equal(matches.length, 1);
 });
+
+test('exercise photos are never precached, and have their own cache that updates keep', () => {
+  assert.deepEqual(precacheList().filter((entry) => entry.includes('images/')), [], 'photos must not be in PRECACHE');
+  assert.match(sw, /const IMAGE_CACHE = 'exercise-images-v\d+';/);
+  // activate only deletes caches whose name starts with the shell prefix
+  assert.match(sw, /name\.startsWith\(CACHE_PREFIX\) && name !== CACHE_NAME/);
+  assert.ok(!/exercise-images/.test("shell-v"), 'the image cache name must not look like a shell cache');
+});

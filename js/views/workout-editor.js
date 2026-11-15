@@ -11,8 +11,11 @@ import {
   saveWorkout, finishWorkout, deleteWorkout, getAllWorkouts, newSet, takePendingScroll,
 } from '../workouts.js';
 import {
-  setLabels, placeholdersFor, tickSet, copyFromAbove, moveItem, untickedCount, lastSessionBefore,
+  setLabels, placeholdersFor, tickSet, copyFromAbove, moveItem, untickedCount, sessionsBefore,
 } from '../logic/workout.js';
+import { DEFAULT_BAR_KG, DEFAULT_INCREMENT, suggestProgression, suggestionText } from '../logic/helpers.js';
+import { warmupDialog } from '../ui/warmup-dialog.js';
+import { db } from '../db.js';
 import { formatKg, formatSetCompact, parseKg, parseReps, isDoneSet } from '../logic/sets.js';
 import { formatDate, formatShortDate, isValidDateStr, todayStr, weekdayName } from '../logic/dates.js';
 import { MUSCLE_GROUPS } from '../logic/muscles.js';
@@ -73,12 +76,22 @@ export function mountEditor(container, { workout, mode, basePath }) {
   }
 
   const nameOf = (exerciseId) => exerciseById.get(exerciseId)?.name || exerciseId;
-  const lastSessionOf = (exerciseId) => lastSessionBefore(allWorkouts, exerciseId, workout);
+  const sessionsOf = (exerciseId) => sessionsBefore(allWorkouts, exerciseId, workout);
 
   // ----- One exercise card -----
   function renderEntry(entry) {
     const index = workout.exercises.indexOf(entry);
-    const last = lastSessionOf(entry.exerciseId);
+    const sessions = sessionsOf(entry.exerciseId);
+    const last = sessions[0] || null;
+    // A suggestion for today, only while logging. It is a hint: nothing is filled in.
+    const suggestion = mode === 'active'
+      ? suggestProgression({
+          sessions: sessions.map((session) => session.sets),
+          repMin: entry.repMin,
+          repMax: entry.repMax,
+          increment: exerciseById.get(entry.exerciseId)?.increment ?? DEFAULT_INCREMENT,
+        })
+      : null;
     const labels = setLabels(entry.sets);
     const placeholders = placeholdersFor(entry.sets, last ? last.sets : []);
     const name = nameOf(entry.exerciseId);
@@ -95,6 +108,7 @@ export function mountEditor(container, { workout, mode, basePath }) {
         actions: [
           index > 0 ? { label: 'Move up', value: 'up' } : null,
           index < workout.exercises.length - 1 ? { label: 'Move down', value: 'down' } : null,
+          { label: 'Warm-up sets…', value: 'warmup' },
           { label: 'Exercise details', value: 'details' },
           { label: 'Remove from workout', value: 'remove', danger: true },
         ].filter(Boolean),
@@ -104,6 +118,29 @@ export function mountEditor(container, { workout, mode, basePath }) {
         save();
         renderCards();
         cards.querySelector(`[data-entry="${entry.id}"]`)?.scrollIntoView({ block: 'nearest' });
+      } else if (choice === 'warmup') {
+        // Start from the weight typed in the first normal row, else the suggestion, else last time's.
+        const firstRow = entry.sets.findIndex((set) => !set.warmup);
+        const typed = firstRow >= 0 ? entry.sets[firstRow].kg : null;
+        const fromLast = firstRow >= 0 && placeholders[firstRow] ? placeholders[firstRow].kg : null;
+        const workKg = [typed, suggestion && suggestion.kg, fromLast].find((kg) => typeof kg === 'number' && kg > 0) ?? null;
+        let barKg = DEFAULT_BAR_KG;
+        try {
+          barKg = await db.getSetting('barWeight');
+        } catch (err) {
+          console.error(err);
+        }
+        const picked = await warmupDialog({ title: `Warm-up for ${name}`, workKg, barKg });
+        if (!picked) return;
+        if (picked.barKg !== barKg) db.setSetting('barWeight', picked.barKg).catch((err) => console.error(err));
+        // The new rows go first, unticked, so each is ticked when it is done.
+        entry.sets = [
+          ...picked.sets.map((set) => ({ ...newSet(), kg: set.kg, reps: set.reps, warmup: true })),
+          ...entry.sets,
+        ];
+        save();
+        refresh();
+        toast(`${plural(picked.sets.length, 'warm-up set', 'warm-up sets')} added.`);
       } else if (choice === 'details') {
         await save();
         location.hash = `#/exercises/${encodeURIComponent(entry.exerciseId)}`;
@@ -243,6 +280,9 @@ export function mountEditor(container, { workout, mode, basePath }) {
           // Last time's numbers: muted, never in the way.
           last
             ? el('p', { class: 'muted', text: `Last · ${formatShortDate(last.date, todayStr())}: ${last.sets.map(formatSetCompact).join(' · ')}` })
+            : null,
+          suggestion
+            ? el('p', { class: 'muted suggestion', text: suggestionText(suggestion, entry) })
             : null
         ),
         menu

@@ -68,14 +68,14 @@ Tick items off (`- [x]`) as they're completed. Build in phase order. Each phase 
 - [x] **Body weight log** with a chart and a 7-day moving average trend line.
 
 ## Phase 6 — Smart helpers and extras
-- [ ] **Progression suggestions (double progression):** each routine exercise has a rep range (default 8–12) and a weight increment (default 2.5 kg, editable per exercise).
+- [x] **Progression suggestions (double progression):** each routine exercise has a rep range (default 8–12) and a weight increment (default 2.5 kg, editable per exercise).
   - If all working sets last time reached the top of the range → suggest +increment and aim for the bottom of the range.
   - Otherwise → suggest the same weight and aim for one more rep.
   - If reps dropped below the range two sessions in a row → suggest keeping or reducing the weight.
   - Show it as a subtle muted hint (e.g. `Suggestion: 32.5 kg`). Never apply it automatically.
-- [ ] **Warm-up set calculator:** from a working weight, suggest a sensible standard ramp (e.g. empty bar ×10, ~40% ×5, ~60% ×3, ~80% ×2), rounded to 2.5 kg, with an adjustable bar weight (default 20 kg). Available inside a workout, with a one-tap "add as warm-up sets".
-- [ ] **CSV export** of all sets (date, exercise, set #, kg, reps, warm-up, notes).
-- [ ] **Exercise images:** stored in the repo, downloaded only when an exercise is first opened, then cached for offline use. Never pre-cache the whole set.
+- [x] **Warm-up set calculator:** from a working weight, suggest a sensible standard ramp (e.g. empty bar ×10, ~40% ×5, ~60% ×3, ~80% ×2), rounded to 2.5 kg, with an adjustable bar weight (default 20 kg). Available inside a workout, with a one-tap "add as warm-up sets".
+- [x] **CSV export** of all sets (date, exercise, set #, kg, reps, warm-up, notes).
+- [x] **Exercise images:** stored in the repo, downloaded only when an exercise is first opened, then cached for offline use. Never pre-cache the whole set.
 - [ ] *(Optional, low priority)* Body measurements log (waist, arms and so on).
 
 ---

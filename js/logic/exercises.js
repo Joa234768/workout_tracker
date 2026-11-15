@@ -36,6 +36,16 @@ const cleanMuscles = (list) => (Array.isArray(list) ? list.filter((m) => MUSCLES
  * overrides applied on top. Archived custom exercises are included (flagged),
  * so old workouts can still show their name.
  */
+/** Photo paths as the dataset writes them: '<exercise id>/<n>.jpg'. Anything else is ignored. */
+export function isImagePath(path) {
+  return typeof path === 'string' && /^[A-Za-z0-9_.\-]+\/[0-9]+\.jpg$/.test(path) && !path.includes('..');
+}
+
+/** Where the app fetches a photo from (relative to the app's own folder). */
+export function imageUrl(path) {
+  return `./images/exercises/${path}`;
+}
+
 export function mergeExercises(dataset, customExercises = [], overrides = []) {
   const overrideById = new Map(overrides.map((o) => [o.exerciseId, o]));
 
@@ -51,6 +61,7 @@ export function mergeExercises(dataset, customExercises = [], overrides = []) {
       category: source.category || null,
       level: source.level || null,
       instructions: Array.isArray(source.instructions) ? source.instructions : [],
+      images: !custom && Array.isArray(source.images) ? source.images.filter(isImagePath) : [],
       primaryMuscles: Array.isArray(override.primaryMuscles) ? cleanMuscles(override.primaryMuscles) : datasetPrimary,
       secondaryMuscles: Array.isArray(override.secondaryMuscles) ? cleanMuscles(override.secondaryMuscles) : datasetSecondary,
       originalPrimaryMuscles: datasetPrimary,

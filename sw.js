@@ -3,7 +3,7 @@
 // APP_VERSION is defined here and only here. Every release bumps it: the
 // browser detects an update by comparing this file byte for byte, and the
 // version names the cache. The Settings screen asks this worker for it.
-const APP_VERSION = '0.9.0';
+const APP_VERSION = '0.10.0';
 
 const CACHE_PREFIX = 'shell-v';
 const CACHE_NAME = `${CACHE_PREFIX}${APP_VERSION}`;
@@ -35,6 +35,7 @@ const PRECACHE = [
   './js/logic/backup.js',
   './js/logic/dates.js',
   './js/logic/exercises.js',
+  './js/logic/helpers.js',
   './js/logic/muscles.js',
   './js/logic/plan.js',
   './js/logic/routines.js',
@@ -51,6 +52,7 @@ const PRECACHE = [
   './js/ui/dom.js',
   './js/ui/export-button.js',
   './js/ui/volume.js',
+  './js/ui/warmup-dialog.js',
   './js/views/today.js',
   './js/views/calendar-month.js',
   './js/views/calendar.js',
@@ -77,6 +79,12 @@ const PRECACHE = [
   './lib/chart.umd.min.js',
   './tests/fixtures/backup-v1.json',
 ];
+
+// Exercise photos are NOT in that list: there are 1,746 of them. Each one is
+// fetched the first time its exercise is opened and then kept in this cache,
+// which survives app updates (activate only removes old shell caches).
+const IMAGE_CACHE = 'exercise-images-v1';
+const IMAGE_PATH = '/images/exercises/';
 
 // On a local dev server, prefer the network so edits show up immediately.
 const IS_LOCAL = ['localhost', '127.0.0.1'].includes(self.location.hostname);
@@ -152,9 +160,28 @@ async function networkFirst(request) {
   }
 }
 
+// An exercise photo: from the image cache if it was opened before, otherwise
+// from the network, keeping a copy for next time. Offline and never opened:
+// the request fails and the page simply shows no photo.
+async function exerciseImage(request) {
+  const cache = await caches.open(IMAGE_CACHE);
+  const hit = await cache.match(request);
+  if (hit) return hit;
+  const response = await fetch(request);
+  if (response.ok) {
+    cache.put(request, response.clone()).catch(() => {}); // a full disk must not break the photo
+  }
+  return response;
+}
+
 self.addEventListener('fetch', (event) => {
   const request = event.request;
   if (request.method !== 'GET') return;
-  if (new URL(request.url).origin !== self.location.origin) return;
+  const url = new URL(request.url);
+  if (url.origin !== self.location.origin) return;
+  if (url.pathname.includes(IMAGE_PATH)) {
+    event.respondWith(exerciseImage(request));
+    return;
+  }
   event.respondWith(IS_LOCAL ? networkFirst(request) : cacheFirst(request));
 });

@@ -7,6 +7,7 @@ import {
   CUSTOM_PREFIX, isCustomId, mergeExercises, lastUsedByExercise, exerciseHistory,
   overrideIsEmpty, validateMuscles, validateCustomExercise,
 } from './logic/exercises.js';
+import { DEFAULT_INCREMENT } from './logic/helpers.js';
 
 let datasetPromise = null;
 
@@ -68,6 +69,17 @@ export function setFavourite(exerciseId, favourite) {
   return updateOverride(exerciseId, (override) => {
     if (favourite) override.favourite = true;
     else delete override.favourite;
+  });
+}
+
+/**
+ * Sets the weight step used for progression suggestions on one exercise.
+ * The default step is not stored, so the override disappears again.
+ */
+export function setIncrement(exerciseId, kg) {
+  return updateOverride(exerciseId, (override) => {
+    if (typeof kg === 'number' && kg > 0 && kg !== DEFAULT_INCREMENT) override.increment = kg;
+    else delete override.increment;
   });
 }
 

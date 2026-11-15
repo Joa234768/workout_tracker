@@ -10,7 +10,15 @@ A vendored, unmodified copy of `dist/exercises.json` from **free-exercise-db**.
 - SHA-256: `5bb747e3fc658f095a60dcbf6d53c96627acdcc6ffb6fffde86f7e26995d40bf`
 - Contents: 876 exercises. Data only; no code from the dataset is used.
 
-Each exercise has `id`, `name`, `equipment`, `primaryMuscles`, `secondaryMuscles`, `instructions`, `category`, `level`, `force`, `mechanic` and `images` (paths only; the image files are not vendored yet, see Phase 6).
+Each exercise has `id`, `name`, `equipment`, `primaryMuscles`, `secondaryMuscles`, `instructions`, `category`, `level`, `force`, `mechanic` and `images` (paths such as `Barbell_Squat/0.jpg`; the files are in `images/exercises/`, see below).
+
+## Exercise photos (`images/exercises/`)
+
+- The same commit of free-exercise-db, folder `exercises/`: 1,746 photos, two per exercise (start and end position). Licence: The Unlicense (public domain).
+- **Not the original files:** they are shrunk from 850 px to 640 px wide and re-saved as JPEG (quality 72) by `tools/make_images.py`, which takes them from 99 MB to 57 MB. Nothing else is changed.
+- The app never downloads them all. A photo is fetched the first time its exercise is opened and then kept on the phone.
+- `tests/dataset.test.js` fails if a photo listed in `exercises.json` is missing.
+- **To regenerate** (only after updating the dataset): download `https://codeload.github.com/yuhonas/free-exercise-db/tar.gz/<commit>` and run `py tools/make_images.py <that file>`. It needs Pillow on this PC (`py -m pip install pillow`); the app itself still has no dependencies.
 
 ## Rules
 

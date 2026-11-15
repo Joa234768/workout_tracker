@@ -150,6 +150,15 @@ export function lastSessionBefore(workouts, exerciseId, current) {
 }
 
 /**
+ * The latest `count` sessions of an exercise before `current`, newest first:
+ * [{ workoutId, date, sets }]. Used for progression suggestions.
+ */
+export function sessionsBefore(workouts, exerciseId, current, count = 2) {
+  const earlier = workouts.filter((w) => w.id !== current.id && startedBefore(w, current));
+  return exerciseHistory(earlier, exerciseId).slice(0, count);
+}
+
+/**
  * Compares this session's working sets with last time's.
  * - kind 'first':  no last time
  * - kind 'volume': both have weight; now/last/delta are kg × reps

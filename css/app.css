@@ -680,3 +680,12 @@ dialog.dialog::backdrop { background: rgba(0, 0, 0, 0.45); }
 .dialog h2 { font-size: var(--fs-title); font-weight: 600; margin-bottom: var(--s-3); }
 .dialog .dialog-body { display: flex; flex-direction: column; gap: var(--s-2); margin-bottom: var(--s-5); }
 .dialog .dialog-actions { display: flex; flex-direction: column; gap: var(--s-2); }
+
+/* ---------- Smart helpers ---------- */
+
+.suggestion { font-style: italic; }
+.warmup-list { padding: var(--s-3); border-radius: var(--radius-small); background: var(--surface-2); font-variant-numeric: tabular-nums; }
+
+/* Exercise photos: start and end position, side by side. */
+.photos { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: var(--s-2); }
+.photo { display: block; width: 100%; height: auto; aspect-ratio: 3 / 2; object-fit: cover; border-radius: var(--radius-small); background: var(--surface-2); }

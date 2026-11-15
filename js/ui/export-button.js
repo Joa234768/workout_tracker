@@ -11,8 +11,9 @@ import { deliverBackupFile } from '../backup.js';
 /**
  * prepare: () => Promise<{ file, exportedAt, countsAsBackup } | null>
  * onDone:  called after the file was shared or downloaded.
+ * noun:    what the file is called in the messages ('Backup', 'File').
  */
-export function exportButton({ label, prepare, secondary = false, onDone }) {
+export function exportButton({ label, prepare, secondary = false, onDone, noun = 'Backup' }) {
   let prepared = null;
   let busy = false;
   const button = el('button', { class: secondary ? 'btn secondary' : 'btn', type: 'button', text: label });
@@ -28,19 +29,19 @@ export function exportButton({ label, prepare, secondary = false, onDone }) {
       }
       const outcome = await deliverBackupFile(prepared);
       if (outcome === 'needs-tap') {
-        button.textContent = 'Backup ready — tap to save';
+        button.textContent = `${noun} ready — tap to save`;
         return; // keep the prepared file for the next tap
       }
       prepared = null;
       button.textContent = label;
-      if (outcome === 'shared') toast('Backup saved.');
-      else if (outcome === 'downloaded') toast('Backup downloaded.');
+      if (outcome === 'shared') toast(`${noun} saved.`);
+      else if (outcome === 'downloaded') toast(`${noun} downloaded.`);
       if (outcome !== 'cancelled' && onDone) onDone();
     } catch (err) {
       console.error(err);
       prepared = null;
       button.textContent = label;
-      toast('The backup could not be created.');
+      toast(`The ${noun.toLowerCase()} could not be created.`);
     } finally {
       busy = false;
     }

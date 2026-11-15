@@ -27,6 +27,7 @@ import { addDays, addMonths, formatDate, formatShortDate, isoWeekday, monthGrid,
 import { weekProgress, weekVolume, resolveTargets } from '../../js/logic/volume.js';
 import { formatKg } from '../../js/logic/sets.js';
 import { weeklyTraining, trainingSummary, rangeStart, movingAverage } from '../../js/logic/stats.js';
+import { warmupSets, buildSetsCsv } from '../../js/logic/helpers.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const PORT = Number(process.env.CHECK_PORT) || 8765;
@@ -148,7 +149,8 @@ const stubShare = (mode) =>
         throw new DOMException('expired', 'NotAllowedError');
       }
       const file = data.files[0];
-      window.__shared.push({ name: file.name, type: file.type, text: await file.text(), keys: Object.keys(data) });
+      const bytes = [...new Uint8Array(await file.slice(0, 3).arrayBuffer())];
+      window.__shared.push({ name: file.name, type: file.type, text: await file.text(), keys: Object.keys(data), bytes });
     };
   })()`);
 
@@ -1162,7 +1164,8 @@ async function run() {
   const fullLibrary = new Map(mergeExercises(dataset, [], []).map((e) => [e.id, e]));
   const doneSet = (extra = {}) => ({ kg: 40, reps: 10, warmup: false, done: true, doneAt: null, ...extra });
   const volumeWorkout = (id, date, entries) => ({
-    id, status: 'completed', date, startedAt: `${date}T10:00:00.000Z`, finishedAt: `${date}T11:00:00.000Z`, durationMin: null,
+    // Started "long ago", so it is always before a workout started during the checks, at any time of day.
+    id, status: 'completed', date, startedAt: '2000-01-01T00:00:00.000Z', finishedAt: `${date}T11:00:00.000Z`, durationMin: null,
     notes: '', routineId: null, routineName: null, plannedRef: null,
     exercises: entries.map(([exerciseId, sets], i) => ({ id: `${id}-e${i}`, exerciseId, repMin: 8, repMax: 12, sets: sets.map((s, n) => ({ ...s, id: `${id}-e${i}-s${n}` })) })),
     createdAt: `${date}T10:00:00.000Z`, updatedAt: `${date}T11:00:00.000Z`,
@@ -1558,6 +1561,155 @@ async function run() {
     equal(backup.bodyWeights.map((e) => e.date).sort(), all.map((e) => e.date).filter((d) => d !== ago(40)).sort(), 'body weights in a backup');
   });
 
+  // ----- Phase 6: suggestions, warm-up sets, CSV export, exercise photos -----
+  const suggestions = () => page.eval(`[...document.querySelectorAll('[data-entry]')].map((c) => c.querySelector('.suggestion')?.textContent ?? null)`);
+  const openEntryMenu = async (e, label) => {
+    await page.eval(`${card(e)}.querySelector('.entry-head .icon-button').click()`);
+    await page.waitFor(DIALOG, { what: 'the exercise menu' });
+    await pressInDialog(label);
+  };
+
+  await check('Progression suggestions: a muted hint from the last sessions, using the exercise\'s weight step', async () => {
+    // Yesterday: squats at the top of the 8–12 range on every set, and curls under it two sessions running.
+    const CURL = 'Barbell_Curl';
+    await dbCall(`for (const workout of ${js([
+      volumeWorkout('squat-yesterday', ago(1), [[SQUAT, [doneSet({ reps: 12 }), doneSet({ reps: 12 }), doneSet({ kg: 30, reps: 5 })]], [CURL, [doneSet({ kg: 20, reps: 7 })]]]),
+      volumeWorkout('curl-3-days-ago', ago(3), [[CURL, [doneSet({ kg: 20, reps: 6 })]]]),
+    ])}) await db.saveWorkout(workout);`);
+    // The fixture gives squats their own weight step; start from the default.
+    await dbCall(`const o = await db.get('exerciseOverrides', ${js(SQUAT)}); if (o) { delete o.increment; await db.put('exerciseOverrides', o); }`);
+    await openApp('#/today');
+    await startFromToday('Start another workout', 'Empty workout');
+    await pickExercise('medium grip', 'Barbell Bench Press - Medium Grip');
+    await pickExercise('barbell squat', 'Barbell Squat');
+    await pickExercise('barbell curl', 'Barbell Curl');
+    await pickExercise('3/4 sit', '3/4 Sit-Up');
+    equal(await suggestions(), [
+      'Suggestion: 40 kg, aim for one more rep',                                    // 40 × 10 on every set last time
+      'Suggestion: 42.5 kg, aim for 8 reps (you reached 12 on every set)',           // the lighter back-off set is not judged
+      'Suggestion: stay at 20 kg or go lighter (under 8 reps two sessions in a row)',
+      null,                                                                          // never done before
+    ], 'the hint on each exercise');
+    equal((await rowsOf(1)).map((r) => [r[1], r[2], r[3]]), [['', '', false], ['', '', false], ['', '', false]], 'a suggestion is never filled in by itself');
+    expect(await page.eval(`getComputedStyle(document.querySelector('.suggestion')).color === getComputedStyle(document.querySelector('[data-entry] .muted')).color`), 'the hint is not muted');
+    await noSidewaysScroll();
+    await shot('suggestions-light');
+    await page.dark(true);
+    await shot('suggestions-dark');
+    await page.dark(false);
+
+    // The weight step belongs to the exercise.
+    await goTo(`#/exercises/${SQUAT}`, `document.getElementById('weight-step')`, 'the squat page');
+    equal(await page.eval(`document.getElementById('weight-step').value`), '2.5', 'the default weight step');
+    const setStep = (value) =>
+      page.eval(`(() => { const i = document.getElementById('weight-step'); i.value = ${js(value)}; i.dispatchEvent(new Event('change')); })()`);
+    await setStep('0');
+    await waitToast('Enter a step above 0 and up to 50 kg.');
+    equal(await page.eval(`document.getElementById('weight-step').value`), '2.5', 'an invalid step is put back');
+    await setStep('5');
+    await waitToast('Weight step saved.');
+    equal((await dbCall(`return db.get('exerciseOverrides', ${js(SQUAT)});`)).increment, 5, 'the stored weight step');
+    await goTo('#/workout', `document.querySelectorAll('[data-entry] .suggestion').length === 3`, 'the workout');
+    equal((await suggestions())[1], 'Suggestion: 45 kg, aim for 8 reps (you reached 12 on every set)', 'the hint with a 5 kg step');
+    await goTo(`#/exercises/${SQUAT}`, `document.getElementById('weight-step')?.value === '5'`, 'the saved step on the squat page');
+    await setStep('2,5');
+    await page.waitFor(`document.getElementById('weight-step').value === '2.5'`, { what: 'the step written out' });
+    await page.waitFor(`[...document.querySelectorAll('.toast')].some((t) => t.textContent === 'Weight step saved.')`, { what: 'the step to be saved' });
+    await page.sleep(100);
+    equal((await dbCall(`return db.get('exerciseOverrides', ${js(SQUAT)});`))?.increment ?? null, null, 'the default step is not stored');
+  });
+
+  await check('Warm-up sets: a ramp from the working weight, added as warm-up rows with one tap', async () => {
+    await goTo('#/workout', `document.querySelectorAll('[data-entry]').length === 4`, 'the workout');
+    await openEntryMenu(1, 'Warm-up sets…');
+    await page.waitFor(`document.getElementById('warmup-work')`, { what: 'the warm-up calculator' });
+    const ramp = () => page.eval(`[...document.querySelectorAll('.warmup-list li')].map((li) => li.textContent)`);
+    const asText = (sets) => sets.map((s) => `${formatKg(s.kg)} kg × ${s.reps}`);
+    equal(await page.eval(`[document.getElementById('warmup-work').value, document.getElementById('warmup-bar').value]`), ['42.5', '20'], 'it starts from the suggested weight and a 20 kg bar');
+    equal(await ramp(), asText(warmupSets(42.5, 20)), 'the ramp to 42.5 kg');
+    equal(await dialogText().then((t) => t.startsWith('Warm-up for Barbell Squat')), true, 'the title names the exercise');
+    await typeInto('#warmup-work', '');
+    expect(await page.eval(`[...${DIALOG}.querySelectorAll('button')].find((b) => b.textContent === 'Add as warm-up sets').disabled`), 'sets can be added without a working weight');
+    await typeInto('#warmup-work', '100');
+    equal(await ramp(), ['20 kg × 10', '40 kg × 5', '60 kg × 3', '80 kg × 2'], 'the ramp to 100 kg');
+    expect(await page.eval(`['warmup-work', 'warmup-bar'].every((id) => parseFloat(getComputedStyle(document.getElementById(id)).fontSize) >= 16)`), 'a field is smaller than 16 px (iOS would zoom)');
+    await shot('warmup-light');
+    await page.dark(true);
+    await shot('warmup-dark');
+    await page.dark(false);
+    await typeInto('#warmup-bar', '15');
+    equal(await ramp(), ['15 kg × 10', '40 kg × 5', '60 kg × 3', '80 kg × 2'], 'the ramp with a 15 kg bar');
+    await pressInDialog('Add as warm-up sets');
+    await dialogClosed();
+    await waitToast('4 warm-up sets added.');
+    equal(await rowsOf(1), [
+      ['W', '15', '10', false], ['W', '40', '5', false], ['W', '60', '3', false], ['W', '80', '2', false],
+      ['1', '', '', false], ['2', '', '', false], ['3', '', '', false],
+    ], 'the squat rows: warm-ups first, not ticked');
+    const stored = (await activeWorkout()).exercises[1].sets.map((s) => [s.kg, s.reps, s.warmup, s.done]);
+    equal(stored.slice(0, 4), [[15, 10, true, false], [40, 5, true, false], [60, 3, true, false], [80, 2, true, false]], 'the stored warm-up rows');
+    equal(await dbCall(`return db.getSetting('barWeight');`), 15, 'the bar weight is remembered');
+    await tapTick(1, 0);
+    await page.waitFor(`${row(1, 0)}.classList.contains('done')`, { what: 'the first warm-up set ticked' });
+    expect(await page.eval(`document.querySelector('.session-muscles').hidden`), 'a warm-up set was counted for the muscles');
+
+    // The bar weight is offered again next time; a weight at or under the bar needs no ramp.
+    await openEntryMenu(0, 'Warm-up sets…');
+    await page.waitFor(`document.getElementById('warmup-bar')?.value === '15'`, { what: 'the remembered bar weight' });
+    await typeInto('#warmup-work', '15');
+    equal(await ramp(), ['This weight is too light to need a ramp.'], 'no ramp for the bar itself');
+    await pressInDialog('Cancel');
+    await dialogClosed();
+    await dbCall(`await db.setSetting('barWeight', 20);`);
+
+    await pressButton('Discard workout');
+    await page.waitFor(DIALOG, { what: 'the discard confirmation' });
+    await pressInDialog('Discard workout');
+    await page.waitFor(`location.hash === '#/today'`, { what: 'Today after discarding' });
+  });
+
+  await check('CSV export: every ticked set of the finished workouts, as a file for a spreadsheet', async () => {
+    await openSettings();
+    const before = await dbCall(`return db.getSetting('lastBackupAt');`);
+    await stubShare('ok');
+    await pressButton('Export sets as CSV');
+    await page.waitFor(`window.__shared.length === 1`, { what: 'the CSV file to reach the share sheet' });
+    await waitToast('File saved.');
+    const [shared] = await page.eval(`window.__shared`);
+    equal([shared.name, shared.type], [`workout-sets-${formatDate(today)}.csv`, 'text/csv'], 'file name and type');
+    equal(shared.bytes, [0xef, 0xbb, 0xbf], 'the file starts with the mark that makes spreadsheets read it as UTF-8');
+    const stores = JSON.parse(await dumpStores());
+    const names = new Map(fixtureLibrary.map((e) => [e.id, e.name]));
+    const expected = buildSetsCsv(stores.workouts, (id) => names.get(id) || id);
+    equal(shared.text.replace(/^﻿/, ''), expected, 'the contents');
+    const lines = expected.split('\r\n');
+    equal(lines[0], 'Date;Exercise;Set;Kg;Reps;Warm-up;Notes', 'the header row');
+    expect(lines.includes(`${formatDate(today)};Barbell Bench Press - Medium Grip;1;40;10;yes;`), 'the warm-up row of today is missing');
+    expect(lines.includes(`${formatDate(ago(20))};Barbell Bench Press - Medium Grip;2;37,5;5;no;`), 'a decimal comma row is missing');
+    equal(lines.length - 2, stores.workouts.filter((w) => w.status === 'completed').reduce((n, w) => n + w.exercises.reduce((m, e) => m + e.sets.length, 0), 0), 'one row per set');
+    equal(await dbCall(`return db.getSetting('lastBackupAt');`), before, 'a CSV export does not count as a backup');
+    await page.eval(`[...document.querySelectorAll('main .btn')].find((b) => b.textContent === 'Export sets as CSV').scrollIntoView({ block: 'center' })`);
+    await shot('settings-csv');
+  });
+
+  await check('Exercise photos: fetched when an exercise is opened, kept for offline, never part of the app shell', async () => {
+    const imageKeys = () => page.eval(`caches.open('exercise-images-v1').then((c) => c.keys()).then((keys) => keys.map((r) => new URL(r.url).pathname))`);
+    const loaded = `[...document.querySelectorAll('.photo')].filter((img) => img.complete && img.naturalWidth === 640).length`;
+    expect(!(await imageKeys()).some((path) => path.includes('/Alternate_Hammer_Curl/')), 'a photo was cached before its exercise was opened');
+    await goTo('#/exercises/Alternate_Hammer_Curl', `${loaded} === 2`, 'both photos of an exercise');
+    equal(await page.eval(`[...document.querySelectorAll('.photo')].map((img) => [img.getAttribute('src'), img.alt])`), [
+      ['./images/exercises/Alternate_Hammer_Curl/0.jpg', 'Alternate Hammer Curl, start position'],
+      ['./images/exercises/Alternate_Hammer_Curl/1.jpg', 'Alternate Hammer Curl, end position'],
+    ], 'the photos');
+    await page.waitFor(`caches.open('exercise-images-v1').then((c) => c.keys()).then((keys) => keys.filter((r) => r.url.includes('/Alternate_Hammer_Curl/')).length === 2)`, { what: 'the photos to be kept for offline' });
+    expect(!(await page.eval(`caches.open(${js(`shell-v${APP_VERSION}`)}).then((c) => c.keys()).then((keys) => keys.some((r) => r.url.includes('/images/')))`)), 'photos ended up in the app shell cache');
+    await noSidewaysScroll();
+    await shot('exercise-photos-light');
+    await page.dark(true);
+    await shot('exercise-photos-dark');
+    await page.dark(false);
+  });
+
   await check('Update: a new version shows the banner, and tapping it loads the new version', async () => {
     const next = '999.0.0';
     server.state.swVersion = next;
@@ -1569,7 +1721,7 @@ async function run() {
     await click('#update-banner');
     await page.waitFor(`${VERSION} === ${js(next)}`, { what: `version ${next} after the reload`, timeout: 15000 });
     expect(!(await page.eval(`!!document.getElementById('update-banner')`)), 'the banner is still there after updating');
-    equal(await page.eval(`caches.keys()`), [`shell-v${next}`], 'cache names after the update');
+    equal((await page.eval(`caches.keys()`)).sort(), ['exercise-images-v1', `shell-v${next}`], 'caches after the update: the new app shell, and the photos kept');
     equal(await page.eval(REMINDER), '21', 'data after the update');
   });
 
@@ -1594,6 +1746,8 @@ async function run() {
     await page.waitFor(`${REMINDER} === '21'`, { what: 'saved data offline' });
     await goTo('#/exercises', `document.querySelectorAll('.list-row').length === 60`, 'the exercise list offline');
     await goTo('#/exercises/Barbell_Squat', `document.querySelectorAll('.steps li').length > 0`, 'exercise instructions offline');
+    await goTo('#/exercises/Alternate_Hammer_Curl', `[...document.querySelectorAll('.photo')].filter((img) => img.complete && img.naturalWidth === 640).length === 2`, 'photos of an exercise opened before, offline');
+    await goTo('#/exercises/Zottman_Curl', `document.querySelectorAll('.steps li').length > 0 && !document.querySelector('.photos')`, 'an exercise never opened before: no photos offline, the rest works');
     await goTo('#/calendar/history', `document.querySelectorAll('.list-row').length >= 1`, 'the workout history offline');
     await goTo('#/calendar', `document.querySelectorAll('.month-grid .day').length === 42`, 'the month view offline');
     await goTo('#/calendar/plan', `document.querySelector('.card-title')?.textContent === 'Weekly plan'`, 'the plan offline');

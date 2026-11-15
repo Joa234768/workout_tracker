@@ -11,7 +11,7 @@ import * as volumeSettings from './volume-settings.js';
 import { BackupError } from '../logic/backup.js';
 import {
   BACKUP_CHANGED, notifyBackupChanged, getBackupStatus,
-  prepareBackupFile, preparePremigrationFile, getPremigrationDate,
+  prepareBackupFile, prepareCsvFile, preparePremigrationFile, getPremigrationDate,
   readBackupFile, importBackup,
 } from '../backup.js';
 
@@ -205,7 +205,13 @@ export function mount(container, params = {}) {
     el('a', { class: 'btn secondary', href: '#/settings/volume', text: 'Targets and counting' })
   );
 
-  container.append(backupCard, volumeCard, aboutCard);
+  const csvCard = section(
+    'Spreadsheet export',
+    el('p', { class: 'muted', text: 'Every set you have logged as a CSV file, one row per set, for Numbers or Excel. It cannot be imported again; use the backup for that.' }),
+    exportButton({ label: 'Export sets as CSV', prepare: prepareCsvFile, secondary: true, noun: 'File' })
+  );
+
+  container.append(backupCard, volumeCard, csvCard, aboutCard);
 
   refreshStatus().catch(showError);
   loadReminder().catch(showError);

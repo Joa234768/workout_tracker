@@ -2,11 +2,11 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync, statSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { MUSCLES, MUSCLE_GROUPS, groupOfMuscle } from '../js/logic/muscles.js';
-import { EQUIPMENT, CUSTOM_PREFIX, mergeExercises } from '../js/logic/exercises.js';
+import { EQUIPMENT, CUSTOM_PREFIX, mergeExercises, isImagePath, imageUrl } from '../js/logic/exercises.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const dataset = JSON.parse(readFileSync(join(root, 'data', 'exercises.json'), 'utf8'));
@@ -77,4 +77,30 @@ test('the whole dataset merges into the library', () => {
   assert.equal(library.length, dataset.length);
   assert.ok(library.every((e) => EQUIPMENT.includes(e.equipment)));
   assert.ok(library.every((e) => !e.custom && !e.favourite && !e.musclesEdited));
+});
+
+test('every photo the dataset lists is in images/exercises, and is a real JPEG', () => {
+  let count = 0;
+  for (const exercise of dataset) {
+    for (const path of exercise.images || []) {
+      assert.ok(isImagePath(path), `${exercise.id}: unexpected photo path ${path}`);
+      const file = join(root, imageUrl(path));
+      assert.ok(existsSync(file), `${path} is missing; run tools/make_images.py`);
+      const head = readFileSync(file).subarray(0, 3);
+      assert.deepEqual([...head], [0xff, 0xd8, 0xff], `${path} is not a JPEG`);
+      assert.ok(statSync(file).size < 150000, `${path} is larger than expected for a 640 px photo`);
+      count += 1;
+    }
+  }
+  assert.ok(count > 1700);
+});
+
+test('photos reach the merged library, but only safe paths, and never for custom exercises', () => {
+  const custom = [{ id: `${CUSTOM_PREFIX}x`, name: 'Mine', equipment: 'other', primaryMuscles: ['chest'], secondaryMuscles: [], images: ['a/0.jpg'] }];
+  const odd = [{ ...dataset[0], id: 'Odd', images: ['Odd/0.jpg', '../secret/0.jpg', 'https://example.com/x.jpg', 42] }];
+  const merged = mergeExercises([dataset[0], ...odd], custom, []);
+  assert.deepEqual(merged[0].images, dataset[0].images);
+  assert.deepEqual(merged[1].images, ['Odd/0.jpg']);
+  assert.deepEqual(merged[2].images, []);
+  assert.equal(imageUrl('Barbell_Squat/0.jpg'), './images/exercises/Barbell_Squat/0.jpg');
 });
