@@ -17,7 +17,9 @@ The full feature list and roadmap are in `SPEC.md`. Read it before starting any 
 - Local dev server: `py -m http.server 8000` (on this PC Python runs as `py`), then open `http://localhost:8000`. Service workers need a server, so double-clicking `index.html` won't work. On localhost the service worker prefers the network, so edits show up on reload.
 - Logic tests: `node --test tests/`. This uses Node's built-in test runner and needs no installs.
 - Database self-check: Settings → "Run database self-check" (`#/settings/selfcheck`), or `http://localhost:8000/tests/browser/` on the PC. It round-trips every store and tests upgrades in scratch databases, in a real browser.
-- **Test service worker changes at `http://app.localhost:8000` too.** On `localhost` the service worker is network-first; any other hostname gets the cache-first behaviour the phone gets. A bug that only exists on the phone's path shipped once because it was only tested on `localhost`.
+- Browser checks: `node tools/browser/check.mjs`. Drives a headless Edge/Chrome at 375 px through the whole app: tabs, service worker and cache, self-check, backup export and import (with real files), the update banner, and offline use. It needs no installs, starts its own server, changes nothing in the repo, exits with 1 on failure, and prints a temp folder of light and dark screenshots. **Read the screenshots** (they are the visual check), and **add a check for each new feature** in the same style.
+- **The service worker behaves differently on `localhost`** (network-first, for development) than on any other hostname (cache-first, like the phone). The browser checks therefore open the app at `http://app.localhost:<port>`. When testing a service worker change by hand, use `http://app.localhost:8000`, not `http://localhost:8000`. A phone-only bug shipped once because it was only tested on `localhost`.
+- What no check on this PC can cover: the iOS share sheet and "Save to Files", `navigator.storage.persist()`, safe areas and the status bar. Say so plainly and list them for me to test on the phone.
 - Icons: `py tools/make_icons.py` regenerates `icons/`.
 
 ## Structure (keep this section updated if it changes)
@@ -38,6 +40,7 @@ The full feature list and roadmap are in `SPEC.md`. Read it before starting any 
 - `tests/`: Node tests for `js/logic/`, plus `fixtures/` (one backup per schema version, kept forever).
 - `tests/browser/`: a standalone page running the same self-check on the PC. Not part of the app shell.
 - `tools/make_icons.py`: one-off icon generator (Python standard library only).
+- `tools/browser/`: the browser checks. `check.mjs` is the list of checks, `cdp.mjs` drives the headless browser (helpers: `goto`, `eval`, `waitFor`, `dark`, `pickFiles`, `screenshot`), `server.mjs` is a static server the checks can stop (offline) and that can serve `sw.js` with another version (update banner). Node built-ins only; not part of the app shell.
 - `docs/DATA_MODEL.md`: stores, backup format, migrations, and decisions for later phases.
 
 ## Data safety rules (most important)
@@ -85,4 +88,4 @@ My training history can't be replaced. Therefore:
 - Works offline after a reload.
 - Data from the previous version still loads (migration tested if the schema changed).
 - Export → import round-trip still restores everything.
-- No console errors, and logic tests pass.
+- No console errors, and both `node --test tests/` and `node tools/browser/check.mjs` pass.
