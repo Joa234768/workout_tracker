@@ -1,25 +1,10 @@
-// Browser self-check for js/db.js. Runs entirely in scratch databases
-// ("selfcheck-…"), never in the app's real database.
+// Self-check for js/db.js, run in a real browser. It works entirely in
+// scratch databases ("selfcheck-…"), never in the app's real database.
+// Shown inside the app at #/settings/selfcheck and at tests/browser/ on the PC.
 
-import { createDb } from '../../js/db.js';
-import { STORES, SCHEMA_VERSION } from '../../js/logic/schema.js';
-import { buildBackup, parseBackup, prepareImport } from '../../js/logic/backup.js';
-
-const list = document.getElementById('results');
-const summary = document.getElementById('summary');
-
-function report(ok, name, detail) {
-  const item = document.createElement('li');
-  item.className = ok ? 'pass' : 'fail';
-  item.textContent = `${ok ? '✓' : '✗'} ${name}`;
-  if (detail) {
-    const extra = document.createElement('div');
-    extra.className = 'detail';
-    extra.textContent = detail;
-    item.append(extra);
-  }
-  list.append(item);
-}
+import { createDb } from './db.js';
+import { STORES, SCHEMA_VERSION } from './logic/schema.js';
+import { buildBackup, parseBackup, prepareImport } from './logic/backup.js';
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -44,8 +29,10 @@ async function wipeScratch() {
   await createDb(MIG).destroy();
 }
 
-async function run() {
-  const fixture = await (await fetch('../fixtures/backup-v1.json', { cache: 'no-store' })).json();
+async function run(fixtureUrl, report) {
+  const response = await fetch(fixtureUrl);
+  if (!response.ok) throw new Error(`could not load the test data (${response.status})`);
+  const fixture = await response.json();
   const checks = [];
   const check = (name, fn) => checks.push({ name, fn });
 
@@ -225,22 +212,16 @@ async function run() {
   return { total: checks.length, failed };
 }
 
-(async () => {
+/**
+ * Runs every check. `report(ok, name, detail)` is called once per check.
+ * `fixtureUrl` points at tests/fixtures/backup-v1.json.
+ * Returns { total, failed }; throws if the checks could not run at all.
+ */
+export async function runSelfCheck({ fixtureUrl, report }) {
+  await wipeScratch();
   try {
-    await wipeScratch();
-    const { total, failed } = await run();
-    await wipeScratch();
-    const ok = failed === 0;
-    summary.textContent = ok ? `All ${total} checks passed.` : `${failed} of ${total} checks failed.`;
-    summary.className = ok ? 'pass' : 'fail';
-    document.title = ok ? 'Self-check: PASS' : 'Self-check: FAIL';
-  } catch (err) {
-    summary.textContent = `The self-check could not run: ${(err && err.message) || err}`;
-    summary.className = 'fail';
-    document.title = 'Self-check: FAIL';
+    return await run(fixtureUrl, report);
+  } finally {
+    await wipeScratch().catch(() => {});
   }
-
-  const info = document.getElementById('info');
-  const persisted = navigator.storage && navigator.storage.persisted ? await navigator.storage.persisted() : false;
-  info.textContent = `Storage: ${persisted ? 'persistent' : 'not granted'} · Schema version ${SCHEMA_VERSION}`;
-})();
+}

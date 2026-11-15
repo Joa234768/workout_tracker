@@ -3,7 +3,7 @@
 // APP_VERSION is defined here and only here. Every release bumps it: the
 // browser detects an update by comparing this file byte for byte, and the
 // version names the cache. The Settings screen asks this worker for it.
-const APP_VERSION = '0.4.0';
+const APP_VERSION = '0.4.1';
 
 const CACHE_PREFIX = 'shell-v';
 const CACHE_NAME = `${CACHE_PREFIX}${APP_VERSION}`;
@@ -24,6 +24,7 @@ const PRECACHE = [
   './js/backup.js',
   './js/db.js',
   './js/router.js',
+  './js/selfcheck.js',
   './js/sw-client.js',
   './js/logic/backup.js',
   './js/logic/dates.js',
@@ -36,7 +37,9 @@ const PRECACHE = [
   './js/views/calendar.js',
   './js/views/progress.js',
   './js/views/exercises.js',
+  './js/views/selfcheck.js',
   './js/views/settings.js',
+  './tests/fixtures/backup-v1.json',
 ];
 
 // On a local dev server, prefer the network so edits show up immediately.
@@ -79,23 +82,37 @@ self.addEventListener('message', (event) => {
 
 async function fromCache(request) {
   const cache = await caches.open(CACHE_NAME);
-  const hit = await cache.match(request, { ignoreSearch: true });
-  if (hit) return hit;
-  if (request.mode === 'navigate') return cache.match('./index.html');
-  return undefined;
+  return cache.match(request, { ignoreSearch: true });
+}
+
+// Last resort when a page is neither cached nor reachable: show the app.
+// Only ever used when the network failed. Answering a reachable page with
+// index.html would show the app shell at the wrong address, where its
+// relative CSS and JS links break.
+async function offlineFallback(request, err) {
+  if (request.mode === 'navigate') {
+    const cache = await caches.open(CACHE_NAME);
+    const shell = await cache.match('./index.html');
+    if (shell) return shell;
+  }
+  throw err;
 }
 
 async function cacheFirst(request) {
-  return (await fromCache(request)) || fetch(request);
+  const hit = await fromCache(request);
+  if (hit) return hit;
+  try {
+    return await fetch(request);
+  } catch (err) {
+    return offlineFallback(request, err);
+  }
 }
 
 async function networkFirst(request) {
   try {
     return await fetch(request);
   } catch (err) {
-    const hit = await fromCache(request);
-    if (hit) return hit;
-    throw err;
+    return (await fromCache(request)) || offlineFallback(request, err);
   }
 }
 

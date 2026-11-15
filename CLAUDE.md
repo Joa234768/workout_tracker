@@ -16,7 +16,8 @@ The full feature list and roadmap are in `SPEC.md`. Read it before starting any 
 ## Commands
 - Local dev server: `py -m http.server 8000` (on this PC Python runs as `py`), then open `http://localhost:8000`. Service workers need a server, so double-clicking `index.html` won't work. On localhost the service worker prefers the network, so edits show up on reload.
 - Logic tests: `node --test tests/`. This uses Node's built-in test runner and needs no installs.
-- Database self-check: open `http://localhost:8000/tests/browser/` (also linked from Settings). It round-trips every store and tests upgrades in scratch databases, in a real browser.
+- Database self-check: Settings → "Run database self-check" (`#/settings/selfcheck`), or `http://localhost:8000/tests/browser/` on the PC. It round-trips every store and tests upgrades in scratch databases, in a real browser.
+- **Test service worker changes at `http://app.localhost:8000` too.** On `localhost` the service worker is network-first; any other hostname gets the cache-first behaviour the phone gets. A bug that only exists on the phone's path shipped once because it was only tested on `localhost`.
 - Icons: `py tools/make_icons.py` regenerates `icons/`.
 
 ## Structure (keep this section updated if it changes)
@@ -29,12 +30,13 @@ The full feature list and roadmap are in `SPEC.md`. Read it before starting any 
 - `js/db.js`: the **only** module that talks to IndexedDB.
 - `js/backup.js`: backup export/import orchestration (share sheet, files).
 - `js/ui/`: small DOM helpers (`el()`, banner/toast, confirm dialog, export button).
-- `js/views/`: one module per screen, each exporting `mount(container, params)` that returns a cleanup function.
+- `js/views/`: one module per screen, each exporting `mount(container, params)` that returns a cleanup function. Sub-screens are routes inside the app (e.g. `#/settings/selfcheck`), never separate HTML pages: the installed app must not navigate away from `index.html`.
+- `js/selfcheck.js`: the database self-check, shown by `js/views/selfcheck.js`.
 - `js/logic/`: pure functions with no DOM and no IndexedDB (`dates.js`, `schema.js`, `backup.js`; later muscle volume, e1RM, progression, warm-up sets, calendar plan).
 - `data/exercises.json` (Phase 1): a vendored copy of free-exercise-db (public domain / Unlicense). The source commit is noted in `data/README.md`.
 - `lib/` (Phase 5): vendored third-party code.
 - `tests/`: Node tests for `js/logic/`, plus `fixtures/` (one backup per schema version, kept forever).
-- `tests/browser/`: the database self-check page. Not part of the app shell.
+- `tests/browser/`: a standalone page running the same self-check on the PC. Not part of the app shell.
 - `tools/make_icons.py`: one-off icon generator (Python standard library only).
 - `docs/DATA_MODEL.md`: stores, backup format, migrations, and decisions for later phases.
 

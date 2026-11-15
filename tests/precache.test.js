@@ -43,9 +43,21 @@ test('every PRECACHE entry exists and is listed once', () => {
   for (const entry of list) {
     if (entry === './') continue;
     assert.ok(entry.startsWith('./'), `${entry} must be a relative ./ path`);
+    assert.ok(!entry.endsWith('.html') || entry === './index.html', `${entry}: only index.html may be a cached page`);
     assert.ok(existsSync(join(root, entry)), `${entry} is in PRECACHE but does not exist`);
   }
   assert.ok(!list.includes('./sw.js'), 'sw.js must not cache itself');
+});
+
+test('index.html is never served in place of a reachable page', () => {
+  // Regression: the self-check page used to be answered with the app shell,
+  // which then could not load its CSS and JS. The shell is only a fallback
+  // for a failed network request.
+  const cacheFirst = /async function cacheFirst\(request\) \{([\s\S]*?)\n\}/.exec(sw);
+  assert.ok(cacheFirst, 'cacheFirst not found in sw.js');
+  assert.match(cacheFirst[1], /catch \(err\) \{\s*return offlineFallback/);
+  const fromCache = /async function fromCache\(request\) \{([\s\S]*?)\n\}/.exec(sw);
+  assert.ok(!fromCache[1].includes('index.html'), 'fromCache must not fall back to index.html');
 });
 
 test('APP_VERSION is a semantic version defined once', () => {

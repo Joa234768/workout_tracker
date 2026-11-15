@@ -6,6 +6,7 @@ import { db } from '../db.js';
 import { SCHEMA_VERSION } from '../logic/schema.js';
 import { formatTimestampDate } from '../logic/dates.js';
 import { confirmDialog } from '../ui/dialog.js';
+import * as selfcheck from './selfcheck.js';
 import { BackupError } from '../logic/backup.js';
 import {
   BACKUP_CHANGED, notifyBackupChanged, getBackupStatus,
@@ -29,7 +30,10 @@ const STORE_LABELS = [
   ['settings', 'setting', 'settings'],
 ];
 
-export function mount(container) {
+export function mount(container, params = {}) {
+  // Sub-screen: #/settings/selfcheck
+  if (params.segments && params.segments[0] === 'selfcheck') return selfcheck.mount(container);
+
   let alive = true;
 
   function showError(err) {
@@ -189,7 +193,7 @@ export function mount(container) {
     el('div', { class: 'row' }, el('span', { text: 'Storage' }), storageValue),
     el('hr', { class: 'divider' }),
     el('div', { class: 'row' }, el('span', { text: 'Data format' }), el('span', { class: 'value', text: `version ${SCHEMA_VERSION}` })),
-    el('a', { class: 'btn secondary', href: './tests/browser/', text: 'Run database self-check' })
+    el('a', { class: 'btn secondary', href: '#/settings/selfcheck', text: 'Run database self-check' })
   );
 
   container.append(backupCard, aboutCard);
