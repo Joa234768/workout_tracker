@@ -1,0 +1,151 @@
+{
+  "app": "workout-tracker",
+  "schemaVersion": 1,
+  "appVersion": "0.2.0",
+  "exportedAt": "2026-11-20T18:30:00.000Z",
+  "stores": {
+    "settings": [
+      { "key": "backupReminderDays", "value": 21 },
+      { "key": "lastBackupAt", "value": "2026-11-10T09:00:00.000Z" },
+      { "key": "muscleTargets", "value": { "chest": 12, "neck": null } },
+      { "key": "volumeCounting", "value": "primary" }
+    ],
+    "workouts": [
+      {
+        "id": "0a1b2c3d-0000-4000-8000-000000000001",
+        "status": "completed",
+        "date": "2026-11-16",
+        "startedAt": "2026-11-16T16:02:11.000Z",
+        "finishedAt": "2026-11-16T17:01:40.000Z",
+        "durationMin": 55,
+        "notes": "Felt strong. <b>Not markup</b> & \"quotes\", æøå.",
+        "routineId": "0a1b2c3d-0000-4000-8000-0000000000a1",
+        "routineName": "Push day",
+        "plannedRef": "rule:2026-11-16",
+        "exerciseIds": ["Barbell_Bench_Press_-_Medium_Grip", "custom-0a1b2c3d-0000-4000-8000-0000000000c1"],
+        "exercises": [
+          {
+            "id": "0a1b2c3d-0000-4000-8000-0000000000e1",
+            "exerciseId": "Barbell_Bench_Press_-_Medium_Grip",
+            "repMin": 8,
+            "repMax": 12,
+            "sets": [
+              { "id": "0a1b2c3d-0000-4000-8000-0000000000s1", "kg": 20, "reps": 10, "warmup": true, "done": true, "doneAt": "2026-11-16T16:05:00.000Z" },
+              { "id": "0a1b2c3d-0000-4000-8000-0000000000s2", "kg": 42.5, "reps": 10, "warmup": false, "done": true, "doneAt": "2026-11-16T16:09:00.000Z" },
+              { "id": "0a1b2c3d-0000-4000-8000-0000000000s3", "kg": 42.5, "reps": 8, "warmup": false, "done": true, "doneAt": "2026-11-16T16:13:00.000Z" }
+            ]
+          },
+          {
+            "id": "0a1b2c3d-0000-4000-8000-0000000000e2",
+            "exerciseId": "custom-0a1b2c3d-0000-4000-8000-0000000000c1",
+            "repMin": 10,
+            "repMax": 15,
+            "sets": [
+              { "id": "0a1b2c3d-0000-4000-8000-0000000000s4", "kg": 0, "reps": 12, "warmup": false, "done": true, "doneAt": "2026-11-16T16:30:00.000Z" }
+            ]
+          }
+        ],
+        "createdAt": "2026-11-16T16:02:11.000Z",
+        "updatedAt": "2026-11-16T17:01:40.000Z"
+      },
+      {
+        "id": "0a1b2c3d-0000-4000-8000-000000000002",
+        "status": "active",
+        "date": "2026-11-18",
+        "startedAt": "2026-11-18T16:00:00.000Z",
+        "finishedAt": null,
+        "durationMin": null,
+        "notes": "",
+        "routineId": null,
+        "routineName": null,
+        "plannedRef": null,
+        "exerciseIds": ["Barbell_Squat"],
+        "exercises": [
+          {
+            "id": "0a1b2c3d-0000-4000-8000-0000000000e3",
+            "exerciseId": "Barbell_Squat",
+            "repMin": 8,
+            "repMax": 12,
+            "sets": [
+              { "id": "0a1b2c3d-0000-4000-8000-0000000000s5", "kg": 60, "reps": 8, "warmup": false, "done": true, "doneAt": "2026-11-18T16:10:00.000Z" },
+              { "id": "0a1b2c3d-0000-4000-8000-0000000000s6", "kg": null, "reps": null, "warmup": false, "done": false, "doneAt": null }
+            ]
+          }
+        ],
+        "createdAt": "2026-11-18T16:00:00.000Z",
+        "updatedAt": "2026-11-18T16:10:00.000Z"
+      }
+    ],
+    "routines": [
+      {
+        "id": "0a1b2c3d-0000-4000-8000-0000000000a1",
+        "name": "Push day",
+        "exercises": [
+          { "id": "0a1b2c3d-0000-4000-8000-0000000000r1", "exerciseId": "Barbell_Bench_Press_-_Medium_Grip", "sets": 3, "repMin": 8, "repMax": 12 }
+        ],
+        "archivedAt": null,
+        "createdAt": "2026-11-15T10:00:00.000Z",
+        "updatedAt": "2026-11-15T10:00:00.000Z"
+      },
+      {
+        "id": "0a1b2c3d-0000-4000-8000-0000000000a2",
+        "name": "Old routine",
+        "exercises": [],
+        "archivedAt": "2026-11-17T08:00:00.000Z",
+        "createdAt": "2026-11-15T10:00:00.000Z",
+        "updatedAt": "2026-11-17T08:00:00.000Z"
+      }
+    ],
+    "planRules": [
+      {
+        "id": "0a1b2c3d-0000-4000-8000-0000000000b1",
+        "startDate": "2026-11-16",
+        "endDate": "2026-12-31",
+        "type": "weekly",
+        "days": { "1": "0a1b2c3d-0000-4000-8000-0000000000a1", "3": "0a1b2c3d-0000-4000-8000-0000000000a1" }
+      },
+      {
+        "id": "0a1b2c3d-0000-4000-8000-0000000000b2",
+        "startDate": "2027-01-01",
+        "endDate": null,
+        "type": "rotation",
+        "weekdays": [1, 3, 5],
+        "routineIds": ["0a1b2c3d-0000-4000-8000-0000000000a1", "0a1b2c3d-0000-4000-8000-0000000000a2"],
+        "offset": 0
+      }
+    ],
+    "planExceptions": [
+      { "id": "0a1b2c3d-0000-4000-8000-0000000000d1", "originalDate": "2026-11-18", "cancelled": false, "movedTo": "2026-11-19", "routineId": null },
+      { "id": "0a1b2c3d-0000-4000-8000-0000000000d2", "originalDate": "2026-11-23", "cancelled": true, "movedTo": null, "routineId": null }
+    ],
+    "plannedOneOffs": [
+      { "id": "0a1b2c3d-0000-4000-8000-0000000000f1", "date": "2026-11-21", "routineId": null, "cancelled": false }
+    ],
+    "exerciseOverrides": [
+      {
+        "exerciseId": "Barbell_Squat",
+        "favourite": true,
+        "primaryMuscles": ["quadriceps"],
+        "secondaryMuscles": ["glutes"],
+        "increment": 5,
+        "updatedAt": "2026-11-15T10:00:00.000Z"
+      }
+    ],
+    "customExercises": [
+      {
+        "id": "custom-0a1b2c3d-0000-4000-8000-0000000000c1",
+        "name": "Ring rows",
+        "equipment": "other",
+        "primaryMuscles": ["middle back"],
+        "secondaryMuscles": ["biceps"],
+        "archivedAt": null,
+        "createdAt": "2026-11-15T10:00:00.000Z",
+        "updatedAt": "2026-11-15T10:00:00.000Z"
+      }
+    ],
+    "bodyWeights": [
+      { "date": "2026-11-16", "kg": 78.4, "updatedAt": "2026-11-16T06:30:00.000Z" },
+      { "date": "2026-11-17", "kg": 78.1, "updatedAt": "2026-11-17T06:31:00.000Z" }
+    ]
+  }
+}

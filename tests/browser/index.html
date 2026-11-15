@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <title>Self-check: running…</title>
+  <link rel="icon" type="image/png" sizes="192x192" href="../../icons/icon-192.png">
+  <link rel="stylesheet" href="../../css/tokens.css">
+  <link rel="stylesheet" href="../../css/app.css">
+  <style>
+    main { padding-top: calc(env(safe-area-inset-top) + var(--s-5)); padding-bottom: var(--s-6); }
+    h1 { font-size: var(--fs-large); letter-spacing: -0.02em; }
+    #results { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s-3); }
+    #results li, #summary { font-size: 15px; }
+    .pass { color: var(--ok); }
+    .fail { color: var(--danger); }
+    #summary { font-weight: 600; }
+    .detail { margin-top: var(--s-1); color: var(--muted); font-size: var(--fs-small); white-space: pre-wrap; word-break: break-word; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Self-check</h1>
+    <p class="muted">Tests the database layer in scratch databases. Your real data is not touched. Needs an internet connection.</p>
+    <section class="card">
+      <p id="summary">Running…</p>
+      <ul id="results"></ul>
+    </section>
+    <p class="muted" id="info"></p>
+    <a class="btn secondary" href="../../#/settings">Back to the app</a>
+  </main>
+  <script type="module" src="./selfcheck.js"></script>
+</body>
+</html>

@@ -1,8 +1,11 @@
-// Startup: wire the tab bar and start the router.
+// Startup: open the database, ask for persistent storage, register the
+// service worker, then start the router.
 
 import { startRouter } from './router.js';
 import { registerServiceWorker, applyUpdate } from './sw-client.js';
 import { showBanner } from './ui/banner.js';
+import { el, section } from './ui/dom.js';
+import { db } from './db.js';
 import * as today from './views/today.js';
 import * as calendar from './views/calendar.js';
 import * as progress from './views/progress.js';
@@ -17,15 +20,9 @@ const routes = {
   settings: { title: 'Settings', view: settings },
 };
 
-startRouter({
-  container: document.getElementById('view'),
-  titleEl: document.getElementById('view-title'),
-  backEl: document.getElementById('back-button'),
-  tabEls: [...document.querySelectorAll('.tabbar a')],
-  routes,
-  fallback: 'today',
-});
+const container = document.getElementById('view');
 
+// Registered first, so a broken release can always be replaced by a fixed one.
 registerServiceWorker({
   onUpdateReady() {
     showBanner({
@@ -35,3 +32,35 @@ registerServiceWorker({
     });
   },
 });
+
+// Ask the browser not to evict our data. iOS decides by itself; Settings shows the result.
+if (navigator.storage && navigator.storage.persist) {
+  navigator.storage.persist().catch(() => {});
+}
+
+async function start() {
+  try {
+    await db.ready();
+  } catch (err) {
+    console.error(err);
+    container.replaceChildren(
+      section(
+        'The saved data could not be opened',
+        el('p', { class: 'muted', text: String((err && err.message) || err) }),
+        el('p', { class: 'muted', text: 'Nothing has been deleted. Close the app completely and open it again.' })
+      )
+    );
+    return;
+  }
+
+  startRouter({
+    container,
+    titleEl: document.getElementById('view-title'),
+    backEl: document.getElementById('back-button'),
+    tabEls: [...document.querySelectorAll('.tabbar a')],
+    routes,
+    fallback: 'today',
+  });
+}
+
+start();
