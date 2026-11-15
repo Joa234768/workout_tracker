@@ -9,6 +9,7 @@ import {
   DB_NAME, PREMIGRATION_DB_NAME, SCHEMA_VERSION, STORES, MIGRATIONS, SETTING_DEFAULTS,
   migrateSnapshot, droppedStores,
 } from './logic/schema.js';
+import { deriveExerciseIds } from './logic/workout.js';
 
 function requestToPromise(request) {
   return new Promise((resolve, reject) => {
@@ -293,6 +294,32 @@ export function createDb({
       return key in settingDefaults ? structuredClone(settingDefaults[key]) : null;
     },
     setSetting: (key, value) => api.put('settings', { key, value }),
+
+    /**
+     * Saves a workout. Two rules are enforced here, for every caller:
+     * - `exerciseIds` (used by the index) is always derived from `exercises`.
+     * - There is at most one workout with status 'active'. Saving a second
+     *   one fails and changes nothing.
+     * Returns the record as stored.
+     */
+    async saveWorkout(workout) {
+      const db = await ready();
+      const tx = db.transaction('workouts', 'readwrite');
+      const done = transactionDone(tx);
+      done.catch(() => {}); // failures are reported by the awaits below
+      const store = tx.objectStore('workouts');
+      const record = { ...workout, exerciseIds: deriveExerciseIds(workout) };
+      if (record.status === 'active') {
+        const active = await requestToPromise(store.index('status').getAll('active'));
+        if (active.some((other) => other.id !== record.id)) {
+          tx.abort();
+          throw new Error('Another workout is already in progress.');
+        }
+      }
+      await requestToPromise(store.put(record));
+      await done;
+      return record;
+    },
 
     /** Every store's records: { storeName: records[] }. Loops over the real store list. */
     async exportStores() {

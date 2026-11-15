@@ -23,6 +23,9 @@ import { fileURLToPath } from 'node:url';
 import { launch } from './cdp.mjs';
 import { createStaticServer } from './server.mjs';
 import { mergeExercises, filterExercises } from '../../js/logic/exercises.js';
+import { addDays, formatDate, formatShortDate, todayStr, weekdayName } from '../../js/logic/dates.js';
+import { weekProgress, resolveTargets } from '../../js/logic/volume.js';
+import { formatKg } from '../../js/logic/sets.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const PORT = Number(process.env.CHECK_PORT) || 8765;
@@ -131,7 +134,12 @@ async function pickBackup(file) {
   await page.pickFiles('input[type=file]', [file]);
   await page.waitFor(DIALOG, { what: 'a dialog after picking a file' });
 }
-const dialogClosed = () => page.waitFor(`!${DIALOG}`, { what: 'the dialog to close' });
+// A dialog is removed from the page once it has closed, and the app acts on
+// the answer right after. Wait for that, not just for the closing to start.
+async function dialogClosed() {
+  await page.waitFor(`!document.querySelector('dialog')`, { what: 'the dialog to close' });
+  await page.sleep(50);
+}
 
 // ----- Exercise library helpers -----
 const LIST_COUNT = `document.querySelector('main > p.muted')?.textContent`;
@@ -559,6 +567,230 @@ async function run() {
     equal(JSON.parse(await dumpStores()).workouts.length, fixture.stores.workouts.length, 'workouts are untouched');
   });
 
+  // ----- Phase 2: logging workouts -----
+  // The fixture's dates are fixed, so "last time" would depend on the day the
+  // checks run. Move its completed workout to a week ago to make it stable.
+  const today = todayStr();
+  const lastWeek = addDays(today, -7);
+  const BENCH = 'Barbell_Bench_Press_-_Medium_Grip';
+  const card = (e) => `document.querySelectorAll('[data-entry]')[${e}]`;
+  const row = (e, r) => `${card(e)}.querySelectorAll('.set-row')[${r}]`;
+  const field = (e, r, n) => `${row(e, r)}.querySelectorAll('input')[${n}]`; // 0 = kg, 1 = reps
+  const typeField = (e, r, n, value) =>
+    page.eval(`(() => { const i = ${field(e, r, n)}; i.focus(); i.value = ${js(value)}; i.dispatchEvent(new Event('input', { bubbles: true })); i.blur(); })()`);
+  const tapTick = (e, r) => page.eval(`${row(e, r)}.querySelector('.tick').click()`);
+  const tapBadge = (e, r) => page.eval(`${row(e, r)}.querySelector('.set-badge').click()`);
+  const rowsOf = (e) =>
+    page.eval(`[...${card(e)}.querySelectorAll('.set-row')].map((r) => [r.querySelector('.set-badge').textContent, ...[...r.querySelectorAll('input')].map((i) => i.value), r.classList.contains('done')])`);
+  const cardTitles = () => page.eval(`[...document.querySelectorAll('[data-entry] .card-title')].map((n) => n.textContent)`);
+  const chooseAction = async (openExpression, label) => {
+    await page.eval(`${openExpression}.click()`);
+    await page.waitFor(DIALOG, { what: 'the options menu' });
+    await pressInDialog(label);
+    await dialogClosed();
+  };
+  const pickExercise = async (query, name) => {
+    await page.eval(`[...document.querySelectorAll('main a.btn')].find((a) => a.textContent === '+ Add exercise').click()`);
+    await page.waitFor(`document.querySelector('input[type=search]')`, { what: 'the exercise picker' });
+    await typeInto('input[type=search]', query);
+    await page.waitFor(`document.querySelector('button.list-link .list-title')?.textContent === ${js(name)}`, { what: `${name} in the picker` });
+    await typeInto('input[type=search]', ''); // the picker shares the library's search text; leave it empty
+    await typeInto('input[type=search]', query);
+    await click('button.list-link');
+    await page.waitFor(`[...document.querySelectorAll('[data-entry] .card-title')].some((n) => n.textContent === ${js(name)})`, { what: `${name} in the workout` });
+  };
+  const activeWorkout = () => dbCall(`return (await db.getAllFromIndex('workouts', 'status', 'active'))[0] ?? null;`);
+
+  await check('Today: a workout in progress is offered again, with a pill on other screens', async () => {
+    await dbCall(`
+      const completed = (await db.getAllFromIndex('workouts', 'status', 'completed'))[0];
+      await db.saveWorkout({ ...completed, date: ${js(lastWeek)}, startedAt: ${js(`${lastWeek}T16:02:11.000Z`)} });`);
+    await openApp('#/today');
+    await page.waitFor(`document.querySelector('.card-title')?.textContent === 'Workout in progress'`, { what: 'the in-progress card' });
+    expect(/^Started (today|18-11-2026) · 1 exercise · 1 set done$/.test(await text('.card .muted')), `card says: ${await text('.card .muted')}`);
+    expect(await page.eval(`document.querySelector('.pill').hidden`), 'the pill repeats the card on Today');
+    await shot('today-in-progress');
+    await goTo('#/settings', `${REMINDER} === '21'`, 'Settings');
+    expect(!(await page.eval(`document.querySelector('.pill').hidden`)), 'no pill on Settings');
+    await click('.pill');
+    await page.waitFor(`location.hash === '#/workout' && document.querySelector('[data-entry] .set-row')`, { what: 'the workout screen' });
+    expect(await page.eval(`document.querySelector('.pill').hidden`), 'the pill shows on the workout screen itself');
+    equal(await page.eval(`document.querySelector('.tabbar [aria-current]').dataset.tab`), 'today', 'highlighted tab');
+    equal(await text('#view-title'), 'Workout', 'screen title');
+    await page.waitFor(`document.querySelector('[data-entry] .card-title')?.textContent === 'Barbell Squat'`, { what: 'the exercise name' });
+    equal(await rowsOf(0), [['1', '60', '8', true], ['2', '', '', false]], 'rows of the resumed workout');
+
+    await pressButton('Discard workout');
+    await page.waitFor(DIALOG, { what: 'the discard confirmation' });
+    await pressInDialog('Discard workout');
+    await page.waitFor(`location.hash === '#/today' && [...document.querySelectorAll('main .btn')].some((b) => b.textContent === 'Start workout')`, { what: 'Today after discarding' });
+    equal(await activeWorkout(), null, 'workout in progress after discarding');
+    expect(await page.eval(`document.querySelector('.pill').hidden`), 'the pill is still there');
+  });
+
+  await check('Logging: last time shown, ✓ accepts it, comma decimals, warm-up, copy and delete', async () => {
+    await pressButton('Start workout');
+    await page.waitFor(`location.hash === '#/workout' && document.querySelector('.hint')`, { what: 'the empty workout' });
+    await pickExercise('medium grip', 'Barbell Bench Press - Medium Grip');
+    equal(await page.eval(`location.hash`), '#/workout', 'address after picking');
+
+    // Last time: two working sets (the warm-up is not shown).
+    equal(await page.eval(`${card(0)}.querySelector('.entry-title .muted').textContent`), `Last · ${formatShortDate(lastWeek, today)}: 42.5×10 · 42.5×8`, 'the "Last" line');
+    equal(await rowsOf(0), [['1', '', '', false], ['2', '', '', false]], 'starts with as many rows as last time');
+    equal(await page.eval(`[0, 1].map((r) => [...${card(0)}.querySelectorAll('.set-row')[r].querySelectorAll('input')].map((i) => i.placeholder))`),
+      [['42.5', '10'], ['42.5', '8']], 'placeholders from last time');
+    equal(await page.eval(`[...${row(0, 0)}.querySelectorAll('input')].map((i) => [i.getAttribute('inputmode'), getComputedStyle(i).fontSize])`),
+      [['decimal', '16px'], ['numeric', '16px']], 'keyboards and font size (16px stops iOS zooming)');
+
+    await tapTick(0, 0); // empty row: accepts last time's values
+    await page.waitFor(`${row(0, 0)}.classList.contains('done')`, { what: 'row 1 to be ticked' });
+    await typeField(0, 1, 0, '45,5'); // Danish decimal comma
+    await typeField(0, 1, 1, '9');
+    await tapTick(0, 1);
+    await page.waitFor(`${row(0, 1)}.classList.contains('done')`, { what: 'row 2 to be ticked' });
+    equal(await rowsOf(0), [['1', '42.5', '10', true], ['2', '45.5', '9', true]], 'rows after ticking');
+
+    await page.eval(`[...${card(0)}.querySelectorAll('.btn')].find((b) => b.textContent === '+ Add set').click()`);
+    await page.waitFor(`${card(0)}.querySelectorAll('.set-row').length === 3`, { what: 'a third row' });
+    await tapTick(0, 2); // empty, and no third set last time: nothing is saved, the kg field gets focus
+    equal(await page.eval(`document.activeElement === ${field(0, 2, 0)}`), true, 'kg field focused after ✓ on an empty row');
+    equal((await rowsOf(0))[2], ['3', '', '', false], 'the empty row stays unticked');
+    await typeField(0, 2, 0, '12 5'); // not a number
+    expect(await page.eval(`${field(0, 2, 0)}.classList.contains('invalid') && ${field(0, 2, 0)}.value === '12 5'`), 'invalid text is not marked');
+    equal((await activeWorkout()).exercises[0].sets[2].kg, null, 'stored weight for invalid text');
+    await tapTick(0, 2);
+    equal((await rowsOf(0))[2][3], false, 'a row with an invalid weight and no reps is not ticked');
+    await typeField(0, 2, 0, '');
+
+    await chooseAction(`${row(0, 2)}.querySelector('.icon-button')`, 'Copy previous set');
+    equal((await rowsOf(0))[2], ['3', '45.5', '9', false], 'row 3 after "Copy previous set"');
+    await tapBadge(0, 2);
+    await page.waitFor(`${row(0, 2)}.querySelector('.set-badge').textContent === 'W'`, { what: 'the warm-up badge' });
+    await tapTick(0, 2);
+    await page.waitFor(`${row(0, 2)}.classList.contains('done')`, { what: 'the warm-up to be ticked' });
+
+    await page.eval(`[...${card(0)}.querySelectorAll('.btn')].find((b) => b.textContent === '+ Add set').click()`);
+    await page.waitFor(`${card(0)}.querySelectorAll('.set-row').length === 4`, { what: 'a fourth row' });
+    await chooseAction(`${row(0, 3)}.querySelector('.icon-button')`, 'Delete set');
+    equal((await rowsOf(0)).length, 3, 'rows after deleting one');
+
+    await page.eval(`(() => { const n = document.getElementById('workout-notes'); n.value = 'Felt <b>good</b>'; n.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+    await page.eval(`(() => { const d = document.getElementById('workout-duration'); d.value = '55'; d.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+    await noSidewaysScroll();
+    await shot('workout-light');
+    await page.dark(true);
+    await shot('workout-dark');
+    await page.dark(false);
+
+    // Closing the app must lose nothing: reload and compare.
+    await page.sleep(300);
+    await openApp('#/workout');
+    await page.waitFor(`document.querySelector('[data-entry] .card-title')?.textContent === 'Barbell Bench Press - Medium Grip'`, { what: 'the workout after a reload' });
+    equal(await rowsOf(0), [['1', '42.5', '10', true], ['2', '45.5', '9', true], ['W', '45.5', '9', true]], 'rows after a reload');
+    equal(await page.eval(`[document.getElementById('workout-notes').value, document.getElementById('workout-duration').value]`), ['Felt <b>good</b>', '55'], 'notes and duration after a reload');
+    const stored = await activeWorkout();
+    equal(stored.exercises[0].sets.map((s) => [s.kg, s.reps, s.warmup, s.done]), [[42.5, 10, false, true], [45.5, 9, false, true], [45.5, 9, true, true]], 'stored sets');
+    equal(stored.exerciseIds, [BENCH], 'stored exercise ids');
+  });
+
+  let finishedId = null;
+  await check('Finishing: reorder, bodyweight set, unticked rows removed after a confirmation', async () => {
+    await pickExercise('pullups', 'Pullups');
+    equal(await cardTitles(), ['Barbell Bench Press - Medium Grip', 'Pullups'], 'exercise order');
+    equal(await rowsOf(1), [['1', '', '', false], ['2', '', '', false], ['3', '', '', false]], 'a new exercise starts with three rows');
+    expect(!(await page.eval(`!!${card(1)}.querySelector('.entry-title .muted')`)), 'a "Last" line shows for an exercise never done');
+    await chooseAction(`${card(1)}.querySelector('.entry-head .icon-button')`, 'Move up');
+    equal(await cardTitles(), ['Pullups', 'Barbell Bench Press - Medium Grip'], 'order after "Move up"');
+    await typeField(0, 0, 1, '12'); // reps only: a bodyweight set
+    await tapTick(0, 0);
+    await page.waitFor(`${row(0, 0)}.classList.contains('done')`, { what: 'the bodyweight set to be ticked' });
+    equal((await rowsOf(0))[0], ['1', '0', '12', true], 'bodyweight row');
+
+    await pressButton('Finish workout');
+    await page.waitFor(DIALOG, { what: 'the finish confirmation' });
+    expect((await dialogText()).includes('2 sets are not ticked and will be removed.'), `dialog says: ${await dialogText()}`);
+    await pressInDialog('Cancel');
+    await dialogClosed();
+    equal((await rowsOf(0)).length, 3, 'rows after cancelling');
+    await pressButton('Finish workout');
+    await page.waitFor(DIALOG, { what: 'the finish confirmation' });
+    await pressInDialog('Finish');
+    await page.waitFor(`location.hash.startsWith('#/calendar/') && document.querySelector('.stats')`, { what: 'the summary' });
+
+    finishedId = await page.eval(`decodeURIComponent(location.hash.split('/')[2])`);
+    const stored = await dbCall(`return db.get('workouts', ${js(finishedId)});`);
+    equal([stored.status, stored.date, stored.durationMin, stored.notes, typeof stored.finishedAt], ['completed', today, 55, 'Felt <b>good</b>', 'string'], 'stored workout');
+    equal(stored.exercises.map((e) => [e.exerciseId, e.sets.length]), [['Pullups', 1], [BENCH, 3]], 'stored exercises (unticked rows gone)');
+    equal(stored.exerciseIds, ['Pullups', BENCH], 'stored exercise ids');
+    equal(await activeWorkout(), null, 'workout in progress after finishing');
+    expect(await page.eval(`document.querySelector('.pill').hidden`), 'the pill is still there after finishing');
+  });
+
+  await check('Summary: totals, muscles toward the weekly target, comparison with last time', async () => {
+    equal(await text('.card-title'), `${weekdayName(today)} ${formatDate(today)}`, 'summary title');
+    equal(await page.eval(`[...document.querySelectorAll('.stat')].map((s) => s.textContent)`),
+      ['2exercises', '3sets', '835kg volume', '55minutes'], 'totals (42.5×10 + 45.5×9 = 834.5 kg; the warm-up is not counted)');
+    expect(await page.eval(`document.querySelector('main').textContent.includes('Plus 1 warm-up set, not counted.')`), 'no warm-up note');
+
+    const library = new Map(mergeExercises(dataset, [], []).map((e) => [e.id, e]));
+    const set = { kg: 1, reps: 1, warmup: false, done: true };
+    // The fixture's settings apply: counting mode "primary" and a chest target of 12.
+    const setting = (key) => fixture.stores.settings.find((s) => s.key === key).value;
+    const expected = weekProgress(
+      { exercises: [{ exerciseId: 'Pullups', sets: [set] }, { exerciseId: BENCH, sets: [set, set] }] }, [], library,
+      { mode: setting('volumeCounting'), targets: resolveTargets(setting('muscleTargets')) }
+    );
+    equal(await page.eval(`[...document.querySelectorAll('.progress-head')].map((h) => [...h.children].map((c) => c.textContent))`),
+      expected.map((g) => [g.label, `+${formatKg(g.added)} → ${formatKg(g.after)}${g.target ? ` / ${formatKg(g.target)}` : ''} sets`]), 'muscle groups');
+    equal(expected.map((g) => [g.id, g.added, g.target]), [['chest', 2, 12], ['back', 1, 10]], 'expected muscle sets');
+    equal(await page.eval(`document.querySelectorAll('.bar-marker').length`), expected.filter((g) => g.target).length, 'target markers');
+
+    equal(await page.eval(`[...document.querySelectorAll('.history li')].map((li) => [...li.children].map((c) => c.textContent))`), [
+      ['Pullups', '12 reps', 'First time'],
+      ['Barbell Bench Press - Medium Grip', '42.5 kg × 10 · 45.5 kg × 9', `Last time (${formatDate(lastWeek)}): 42.5 kg × 10 · 42.5 kg × 8`, '+70 kg volume'],
+    ], 'exercises compared with last time');
+    equal(await text('.notes'), 'Felt <b>good</b>', 'notes as plain text');
+    expect(!(await page.eval(`!!document.querySelector('main b')`)), 'notes were rendered as HTML');
+    await noSidewaysScroll();
+    await shot('summary-light');
+    await page.dark(true);
+    await shot('summary-dark');
+    await page.dark(false);
+  });
+
+  await check('History: list, edit a past workout (sets and date), delete it', async () => {
+    const yesterday = addDays(today, -1);
+    await goTo('#/calendar', `document.querySelectorAll('.list-row').length === 2`, 'two workouts in the history');
+    equal(await page.eval(`[...document.querySelectorAll('.list-row')].map((r) => [...r.querySelectorAll('span')].map((s) => s.textContent).slice(0, 2))`), [
+      [`${weekdayName(today)} ${formatDate(today)}`, '2 exercises · 3 sets · 835 kg'],
+      [`${weekdayName(lastWeek)} ${formatDate(lastWeek)}`, 'Push day · 2 exercises · 3 sets · 765 kg'],
+    ], 'history rows, newest first');
+    await shot('history');
+    await click('.list-row .list-link');
+    await page.waitFor(`document.querySelector('.stats')`, { what: 'the summary' });
+    await page.eval(`[...document.querySelectorAll('main a.btn')].find((a) => a.textContent === 'Edit workout').click()`);
+    await page.waitFor(`location.hash.endsWith('/edit') && document.querySelectorAll('[data-entry]').length === 2 && document.getElementById('workout-date')`, { what: 'the editor' });
+    await page.waitFor(`document.querySelector('[data-entry] .card-title')?.textContent === 'Pullups'`, { what: 'exercise names' });
+    equal(await page.eval(`document.getElementById('workout-date').value`), today, 'date field');
+    await typeField(1, 1, 1, '10'); // 45.5 × 9 → 45.5 × 10
+    await page.eval(`(() => { const d = document.getElementById('workout-date'); d.value = ${js(yesterday)}; d.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+    await shot('workout-edit');
+    await pressButton('Done');
+    await page.waitFor(`location.hash === ${js(`#/calendar/${finishedId}`)} && document.querySelector('.stats')`, { what: 'the summary after editing' });
+    equal(await text('.card-title'), `${weekdayName(yesterday)} ${formatDate(yesterday)}`, 'summary date after editing');
+    equal(await page.eval(`document.querySelectorAll('.stat')[2].textContent`), '880kg volume', 'volume after editing (42.5×10 + 45.5×10)');
+    const stored = await dbCall(`return db.get('workouts', ${js(finishedId)});`);
+    equal([stored.status, stored.date, stored.exercises[1].sets[1].reps], ['completed', yesterday, 10], 'stored workout after editing');
+    equal(await activeWorkout(), null, 'editing a past workout must not create one in progress');
+
+    await pressButton('Delete workout');
+    await page.waitFor(DIALOG, { what: 'the delete confirmation' });
+    await pressInDialog('Delete workout');
+    await page.waitFor(`location.hash === '#/calendar' && document.querySelectorAll('.list-row').length === 1`, { what: 'the history after deleting' });
+    equal(await dbCall(`return db.get('workouts', ${js(finishedId)});`), null, 'the deleted workout');
+    await goTo(`#/calendar/${finishedId}`, `document.querySelector('.card-title')?.textContent === 'Workout not found'`, 'the not-found screen');
+  });
+
   await check('Update: a new version shows the banner, and tapping it loads the new version', async () => {
     const next = '999.0.0';
     server.state.swVersion = next;
@@ -595,6 +827,10 @@ async function run() {
     await page.waitFor(`${REMINDER} === '21'`, { what: 'saved data offline' });
     await goTo('#/exercises', `document.querySelectorAll('.list-row').length === 60`, 'the exercise list offline');
     await goTo('#/exercises/Barbell_Squat', `document.querySelectorAll('.steps li').length > 0`, 'exercise instructions offline');
+    await goTo('#/calendar', `document.querySelectorAll('.list-row').length === 1`, 'the workout history offline');
+    await goTo('#/today', `[...document.querySelectorAll('main .btn')].some((b) => b.textContent === 'Start workout')`, 'Today offline');
+    await pressButton('Start workout');
+    await page.waitFor(`location.hash === '#/workout' && document.querySelector('.hint')`, { what: 'starting a workout offline' });
     await goTo('#/settings', `document.querySelector('main a.btn[href="#/settings/selfcheck"]')`, 'Settings offline');
     await click('main a.btn[href="#/settings/selfcheck"]');
     await page.waitFor(`/^All \\d+ checks passed\\.$/.test(document.querySelector('.check-summary')?.textContent ?? '')`, {

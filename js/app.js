@@ -12,6 +12,8 @@ import * as calendar from './views/calendar.js';
 import * as progress from './views/progress.js';
 import * as exercises from './views/exercises.js';
 import * as settings from './views/settings.js';
+import * as workout from './views/workout.js';
+import { WORKOUT_CHANGED, getActiveWorkout } from './workouts.js';
 
 const routes = {
   today: { title: 'Today', view: today },
@@ -19,6 +21,8 @@ const routes = {
   progress: { title: 'Progress', view: progress },
   exercises: { title: 'Exercises', view: exercises },
   settings: { title: 'Settings', view: settings },
+  // The workout in progress is its own screen, shown under the Today tab.
+  workout: { title: 'Workout', view: workout, tab: 'today' },
 };
 
 const container = document.getElementById('view');
@@ -37,6 +41,19 @@ registerServiceWorker({
 // Ask the browser not to evict our data. iOS decides by itself; Settings shows the result.
 if (navigator.storage && navigator.storage.persist) {
   navigator.storage.persist().catch(() => {});
+}
+
+// A small "Workout in progress" pill above the tab bar. Not shown on the
+// workout itself, nor on Today, whose card already says the same.
+let currentRoute = null;
+const pill = el('a', { class: 'pill', href: '#/workout', text: 'Workout in progress ›', hidden: true });
+document.getElementById('banners').append(pill);
+function refreshWorkoutPill() {
+  getActiveWorkout()
+    .then((active) => {
+      pill.hidden = !active || currentRoute === 'workout' || currentRoute === 'today';
+    })
+    .catch((err) => console.error(err));
 }
 
 async function start() {
@@ -61,7 +78,12 @@ async function start() {
     tabEls: [...document.querySelectorAll('.tabbar a')],
     routes,
     fallback: 'today',
+    onChange: (name) => {
+      currentRoute = name;
+      refreshWorkoutPill();
+    },
   });
+  window.addEventListener(WORKOUT_CHANGED, refreshWorkoutPill);
 
   // A small dot on the Settings tab while a backup is due.
   const settingsTab = document.querySelector('.tabbar a[data-tab="settings"]');

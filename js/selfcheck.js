@@ -120,6 +120,34 @@ async function run(fixtureUrl, report) {
     assert((await main.hasUserData()) === true, 'hasUserData should be true');
   });
 
+  check('Workouts: exercise ids are derived on save, and only one can be in progress', async () => {
+    const active = (await main.getAllFromIndex('workouts', 'status', 'active'))[0];
+    assert(active, 'the fixture has no in-progress workout');
+    const saved = await main.saveWorkout({
+      ...active,
+      exerciseIds: ['stale'],
+      exercises: [...active.exercises, { id: 'x', exerciseId: 'Pullups', repMin: 8, repMax: 12, sets: [] }],
+    });
+    same(saved.exerciseIds, ['Barbell_Squat', 'Pullups'], 'derived exercise ids');
+    same((await main.getAllFromIndex('workouts', 'exerciseIds', 'Pullups')).map((w) => w.id), [active.id], 'index lookup after save');
+
+    const before = await main.getAll('workouts');
+    let refused = false;
+    try {
+      await main.saveWorkout({ ...active, id: 'second-active' });
+    } catch {
+      refused = true;
+    }
+    assert(refused, 'a second in-progress workout was accepted');
+    same(await main.getAll('workouts'), before, 'workouts changed although the save was refused');
+
+    await main.saveWorkout({ ...active, id: 'another-completed', status: 'completed' }); // completed ones are unlimited
+    same((await main.getAll('workouts')).length, before.length + 1, 'completed workout not saved');
+    await main.remove('workouts', 'another-completed');
+    await main.saveWorkout(active); // back to the fixture's record
+    seeded = await main.exportStores();
+  });
+
   // --- Upgrades, with a made-up schema ---
   const v1 = { ...MIG, version: 1, stores: [{ name: 'items', keyPath: 'id', indexes: [] }], migrations: [] };
   const step12 = {

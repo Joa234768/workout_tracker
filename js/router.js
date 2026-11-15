@@ -17,6 +17,7 @@ function parseHash() {
 
 /**
  * routes: { today: { title, view: { mount(container, params) → cleanup? } }, … }
+ * A route that is not a tab itself names the tab to highlight: { tab: 'today' }.
  * Returns { refresh } to re-render the current route.
  */
 export function startRouter({ container, titleEl, backEl, tabEls, routes, fallback, onChange }) {
@@ -44,7 +45,7 @@ export function startRouter({ container, titleEl, backEl, tabEls, routes, fallba
     titleEl.textContent = route.title;
     document.title = `${route.title} · Workout Tracker`;
     for (const tab of tabEls) {
-      if (tab.dataset.tab === name) tab.setAttribute('aria-current', 'page');
+      if (tab.dataset.tab === (route.tab || name)) tab.setAttribute('aria-current', 'page');
       else tab.removeAttribute('aria-current');
     }
     // An installed iPhone app has no browser back button, so sub-screens get

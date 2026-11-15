@@ -69,6 +69,13 @@ All nine stores exist from version 1, although Phase 0 only uses `settings`.
 - Editing a past workout edits the same record in place.
 - `kg` and `reps` are numbers, or `null` while a row is empty. For bodyweight exercises `kg` is 0 or the added weight.
 - Two workouts on the same date are allowed.
+- `db.saveWorkout()` is the only way workouts are written. It derives `exerciseIds` and refuses a second `active` workout.
+- **✓ on a row:** typed values win; empty fields are filled from last time's matching set (matched by position among non-warm-up rows). Reps typed but no weight and no last time means bodyweight (`kg: 0`). Nothing typed and no last time: nothing is saved and the kg field gets focus.
+- An exercise added to a workout starts with as many rows as its last session had working sets, or three if it has never been done.
+- **Finishing** removes unticked rows (after a confirmation) and exercises left without sets. A workout with nothing ticked is deleted instead of saved. The same happens when "Done" is pressed after editing a past workout.
+- `finishedAt` is set once, when the workout is first finished; editing later does not change it.
+- "Last time" for an exercise, seen from a workout, is the latest *completed* workout before it (by `date`, then `startedAt`) with working sets of that exercise. So editing an old workout compares it with what came before it, not with newer ones.
+- `durationMin` is typed by hand (1–600) or `null`. There is no timer.
 
 ### routines
 
@@ -202,6 +209,12 @@ A **working set** is a set with `done === true`, `warmup === false` and `reps > 
 
 - Default target 10 sets/week: Chest, Back, Shoulders, Biceps, Triceps, Quads, Hamstrings, Glutes, Abs, Calves.
 - No default target: Traps, Lower back, Forearms, Adductors, Abductors, Neck (shown under "More"; giving one a target promotes it).
+
+## Workout summary
+
+- Totals count working sets only; warm-ups are mentioned separately.
+- "Muscles this week" uses the Monday–Sunday week of the workout's `date`, the `volumeCounting` setting and the targets (`muscleTargets` over the defaults). It lists only the groups this workout trained.
+- Each exercise is compared with last time by volume (kg × reps). If either session was bodyweight, total reps are compared instead.
 
 ## Smaller decisions for later phases
 

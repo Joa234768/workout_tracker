@@ -27,19 +27,19 @@ Tick items off (`- [x]`) as they're completed. Build in phase order. Each phase 
 - [x] Create custom exercises (name, equipment, primary/secondary muscles).
 
 ## Phase 2 — Logging workouts
-- [ ] Start a workout: from a planned/routine workout, or as an empty workout.
-- [ ] Per exercise, a list of set rows: **set # · kg · reps · warm-up toggle · done ✓**. A "+ Add set" button. A routine pre-fills the number of sets. Each set can have its own weight and reps (e.g. 10 kg × 10, 8 kg × 12, 6 kg × 10).
-- [ ] **Last time's numbers, shown unobtrusively:**
+- [x] Start a workout: from a planned/routine workout, or as an empty workout. *(Empty workouts are done. Starting from a routine or a planned day arrives with Phase 3, which adds routines.)*
+- [x] Per exercise, a list of set rows: **set # · kg · reps · warm-up toggle · done ✓**. A "+ Add set" button. A routine pre-fills the number of sets. Each set can have its own weight and reps (e.g. 10 kg × 10, 8 kg × 12, 6 kg × 10).
+- [x] **Last time's numbers, shown unobtrusively:**
   - A muted grey line under the exercise name, e.g. `Last · 12 Nov: 10×10 · 12×8 · 10×6`.
   - Last time's matching set appears as grey **placeholder text** in the kg/reps fields.
   - Tapping ✓ on an empty row accepts the placeholder values. "Copy previous set" fills a row with the set above it.
-- [ ] Warm-up toggle per set. Warm-up sets are excluded from volume, e1RM and progression.
-- [ ] Notes: per workout.
-- [ ] Add, remove and reorder exercises during a workout.
-- [ ] **An in-progress workout survives closing the app** (saved on every change). On reopening, the app resumes it.
-- [ ] Optional **manual duration** field (typed in minutes). No running timer.
-- [ ] **End-of-workout summary:** exercises and sets completed, total volume, muscle groups trained and how far this pushed each toward its weekly target, and a per-exercise comparison with last time.
-- [ ] Workout history list. Open any past workout to **edit or delete** it.
+- [x] Warm-up toggle per set. Warm-up sets are excluded from volume, e1RM and progression.
+- [x] Notes: per workout.
+- [x] Add, remove and reorder exercises during a workout.
+- [x] **An in-progress workout survives closing the app** (saved on every change). On reopening, the app resumes it.
+- [x] Optional **manual duration** field (typed in minutes). No running timer.
+- [x] **End-of-workout summary:** exercises and sets completed, total volume, muscle groups trained and how far this pushed each toward its weekly target, and a per-exercise comparison with last time.
+- [x] Workout history list. Open any past workout to **edit or delete** it.
 
 ## Phase 3 — Routines and calendar planning
 - [ ] **Routines (templates):** a name (e.g. "Push day"), an ordered list of exercises, the number of sets per exercise, and an optional target rep range per exercise (default 8–12). Create, edit, duplicate and delete them.

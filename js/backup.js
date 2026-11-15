@@ -5,6 +5,7 @@ import { db } from './db.js';
 import { getAppVersion } from './sw-client.js';
 import { SCHEMA_VERSION } from './logic/schema.js';
 import { formatTimestampDate } from './logic/dates.js';
+import { notifyWorkoutChanged } from './workouts.js';
 import {
   buildBackup, backupFilename, backupStatus, parseBackup, prepareImport, summarizeBackup,
 } from './logic/backup.js';
@@ -77,6 +78,7 @@ export async function readBackupFile(file) {
 export async function importBackup(checked) {
   await db.replaceAll(checked.data);
   notifyBackupChanged();
+  notifyWorkoutChanged(); // the workout in progress may have appeared or gone
 }
 
 function download(file) {

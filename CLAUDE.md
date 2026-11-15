@@ -31,11 +31,13 @@ The full feature list and roadmap are in `SPEC.md`. Read it before starting any 
 - `js/sw-client.js`: service worker registration, update detection, app version lookup.
 - `js/db.js`: the **only** module that talks to IndexedDB.
 - `js/backup.js`: backup export/import orchestration (share sheet, files).
+- `js/workouts.js`: workouts' data access (start, save on every change, finish, list, delete).
 - `js/exercises.js`: the exercise library's data access (loads `data/exercises.json`, merges it with my custom exercises and overrides, saves my changes).
 - `js/ui/`: small DOM helpers (`el()`, banner/toast, confirm dialog, export button, chips and the muscle picker).
 - `js/views/`: one module per screen, each exporting `mount(container, params)` that returns a cleanup function. Sub-screens are routes inside the app (e.g. `#/settings/selfcheck`), never separate HTML pages: the installed app must not navigate away from `index.html`.
 - `js/selfcheck.js`: the database self-check, shown by `js/views/selfcheck.js`.
-- `js/logic/`: pure functions with no DOM and no IndexedDB (`dates.js`, `schema.js`, `backup.js`, `muscles.js`, `exercises.js`, `sets.js`; later muscle volume, e1RM, progression, warm-up sets, calendar plan). `sets.js` defines what a working set is and how weights are written; use it everywhere.
+- Screens outside the five tabs: `#/workout` (the workout in progress, under the Today tab). Workout history, summaries and editing live under `#/calendar/<id>`. `js/views/workout-editor.js` is shared by the workout in progress and editing a past workout.
+- `js/logic/`: pure functions with no DOM and no IndexedDB (`dates.js`, `schema.js`, `backup.js`, `muscles.js`, `exercises.js`, `sets.js`, `workout.js`, `volume.js`; later e1RM, progression, warm-up sets, calendar plan). `sets.js` defines what a working set is and how weights are written; use it everywhere.
 - `data/exercises.json`: a vendored, unmodified copy of free-exercise-db (public domain / Unlicense). The source commit, checksum and update steps are in `data/README.md`. Never edit it by hand.
 - `lib/` (Phase 5): vendored third-party code.
 - `tests/`: Node tests for `js/logic/` and the dataset, plus `fixtures/` (one backup per schema version, and `exercise-ids.json`, the list of every exercise ID that has shipped; both kept forever).

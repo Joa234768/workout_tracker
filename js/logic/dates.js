@@ -91,3 +91,22 @@ export function formatDate(dateStr) {
 export function formatTimestampDate(timestamp) {
   return formatDate(toDateStr(timestamp));
 }
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
+/**
+ * The short form used in the "Last" line: '12 Nov'. The year is added when
+ * it differs from `today`'s year: '12 Nov 2025'.
+ */
+export function formatShortDate(dateStr, today = null) {
+  if (!isValidDateStr(dateStr)) throw new Error(`Invalid date: ${dateStr}`);
+  const [year, month, day] = dateStr.split('-');
+  const short = `${Number(day)} ${MONTHS[Number(month) - 1]}`;
+  return today && today.slice(0, 4) !== year ? `${short} ${year}` : short;
+}
+
+/** 'Monday' … 'Sunday'. */
+export function weekdayName(dateStr) {
+  return WEEKDAYS[isoWeekday(dateStr) - 1];
+}

@@ -7,6 +7,37 @@ import { el } from './dom.js';
  * - lines: strings shown as paragraphs (set with textContent).
  * - extra: an optional element (e.g. a button) shown above the confirm button.
  */
+/**
+ * A small menu of actions. Resolves to the chosen action's `value`, or null
+ * if cancelled. actions: [{ label, value, danger }].
+ */
+export function actionSheet({ title, actions }) {
+  return new Promise((resolve) => {
+    const dialog = el('dialog', { class: 'dialog' });
+    let chosen = null;
+    const buttons = actions.map((action) =>
+      el('button', {
+        class: action.danger ? 'btn secondary danger-text' : 'btn secondary',
+        type: 'button',
+        text: action.label,
+        onclick: () => {
+          chosen = action.value;
+          dialog.close();
+        },
+      })
+    );
+    const cancel = el('button', { class: 'btn plain', type: 'button', text: 'Cancel', onclick: () => dialog.close() });
+    dialog.append(el('h2', { text: title }), el('div', { class: 'dialog-actions' }, buttons, cancel));
+    dialog.addEventListener('close', () => {
+      dialog.remove();
+      resolve(chosen);
+    });
+    document.body.append(dialog);
+    dialog.showModal();
+    cancel.focus();
+  });
+}
+
 export function confirmDialog({ title, lines = [], confirmLabel = 'OK', cancelLabel = 'Cancel', danger = false, extra = null }) {
   return new Promise((resolve) => {
     const dialog = el('dialog', { class: 'dialog' });

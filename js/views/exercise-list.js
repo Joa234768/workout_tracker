@@ -27,7 +27,11 @@ export function exerciseSummary(exercise) {
   return [groups, equipmentLabel(exercise.equipment), exercise.custom ? 'Custom' : null].filter(Boolean).join(' · ');
 }
 
-export function mount(container) {
+/**
+ * onPick: when given, the list is a picker. Tapping a row calls
+ * onPick(exercise) instead of opening the exercise.
+ */
+export function mount(container, { onPick = null } = {}) {
   let alive = true;
   let library = [];
   let lastUsed = {};
@@ -51,7 +55,7 @@ export function mount(container) {
   const rows = el('ul', { class: 'list' });
   const more = el('button', { class: 'btn secondary', type: 'button', hidden: true });
 
-  container.append(el('div', { class: 'search-row' }, search, addButton), muscleRow, equipmentRow, count, rows, more);
+  container.append(el('div', { class: 'search-row' }, search, onPick ? null : addButton), muscleRow, equipmentRow, count, rows, more);
 
   function changed() {
     state.shown = PAGE_SIZE;
@@ -114,13 +118,14 @@ export function mount(container) {
         toast('The favourite could not be saved.');
       }
     });
-    return el('li', { class: 'list-row' },
-      el('a', { class: 'list-link', href: `#/exercises/${encodeURIComponent(exercise.id)}` },
-        el('span', { class: 'list-title', text: exercise.name }),
-        el('span', { class: 'muted', text: exerciseSummary(exercise) })
-      ),
-      star
-    );
+    const label = [
+      el('span', { class: 'list-title', text: exercise.name }),
+      el('span', { class: 'muted', text: exerciseSummary(exercise) }),
+    ];
+    const main = onPick
+      ? el('button', { class: 'list-link', type: 'button', onclick: () => onPick(exercise) }, label)
+      : el('a', { class: 'list-link', href: `#/exercises/${encodeURIComponent(exercise.id)}` }, label);
+    return el('li', { class: 'list-row' }, main, star);
   }
 
   function renderList() {
@@ -170,7 +175,7 @@ export function mount(container) {
       library = loadedLibrary;
       lastUsed = loadedLastUsed;
       renderList();
-      if (state.scrollY) window.scrollTo(0, state.scrollY);
+      if (state.scrollY && !onPick) window.scrollTo(0, state.scrollY);
     })
     .catch((err) => {
       console.error(err);
@@ -179,6 +184,6 @@ export function mount(container) {
 
   return () => {
     alive = false;
-    state.scrollY = window.scrollY;
+    if (!onPick) state.scrollY = window.scrollY;
   };
 }
