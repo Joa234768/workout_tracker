@@ -1,7 +1,8 @@
 // Startup: wire the tab bar and start the router.
 
 import { startRouter } from './router.js';
-import { registerServiceWorker } from './sw-client.js';
+import { registerServiceWorker, applyUpdate } from './sw-client.js';
+import { showBanner } from './ui/banner.js';
 import * as today from './views/today.js';
 import * as calendar from './views/calendar.js';
 import * as progress from './views/progress.js';
@@ -25,4 +26,12 @@ startRouter({
   fallback: 'today',
 });
 
-registerServiceWorker();
+registerServiceWorker({
+  onUpdateReady() {
+    showBanner({
+      id: 'update-banner',
+      text: 'Update available — tap to reload',
+      onTap: applyUpdate,
+    });
+  },
+});
