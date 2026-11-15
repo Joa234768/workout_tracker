@@ -200,6 +200,10 @@ main {
 
 .muted a { color: inherit; }
 
+/* A muted line that needs a little attention (e.g. backup due). */
+.muted.attention { color: var(--accent); }
+.muted.reminder { padding: 0 var(--s-1); }
+
 .row {
   display: flex;
   align-items: center;

@@ -6,6 +6,7 @@ import { registerServiceWorker, applyUpdate } from './sw-client.js';
 import { showBanner } from './ui/banner.js';
 import { el, section } from './ui/dom.js';
 import { db } from './db.js';
+import { BACKUP_CHANGED, getBackupStatus } from './backup.js';
 import * as today from './views/today.js';
 import * as calendar from './views/calendar.js';
 import * as progress from './views/progress.js';
@@ -60,6 +61,18 @@ async function start() {
     tabEls: [...document.querySelectorAll('.tabbar a')],
     routes,
     fallback: 'today',
+  });
+
+  // A small dot on the Settings tab while a backup is due.
+  const settingsTab = document.querySelector('.tabbar a[data-tab="settings"]');
+  const refreshBackupDot = () =>
+    getBackupStatus()
+      .then((status) => settingsTab.classList.toggle('has-dot', status.due))
+      .catch((err) => console.error(err));
+  refreshBackupDot();
+  window.addEventListener(BACKUP_CHANGED, refreshBackupDot);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') refreshBackupDot(); // the day may have changed
   });
 }
 
