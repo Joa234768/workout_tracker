@@ -129,7 +129,13 @@ Built-in exercises are read from `data/exercises.json` and never copied into Ind
 - The `custom-` prefix means a custom ID can never collide with a dataset ID.
 - Custom exercises used by a logged set are archived, never deleted.
 - One weight `increment` per exercise (default 2.5), shared across routines. The rep range is per routine exercise.
-- "Recently used" is computed from workouts, not stored.
+- "Recently used" is computed from workouts, not stored: the latest date with a ticked set, the in-progress workout included.
+- **"My exercises"** in the library means favourites plus custom exercises.
+- An override record that no longer says anything (not a favourite, no muscle tags, no increment) is deleted instead of kept empty.
+- Muscle tags always have at least one primary muscle, and a muscle is never both primary and secondary.
+- Built-in exercises get their muscle tags edited as an override; a custom exercise is edited as a whole (name, equipment, muscles) in its own record.
+- Deleting a custom exercise deletes the record and its override, unless a workout refers to it; then it is archived.
+- The dataset leaves `equipment` empty for 77 exercises. The app treats those as `other`. Nothing is written back to the dataset.
 
 ### bodyWeights
 

@@ -31,13 +31,14 @@ The full feature list and roadmap are in `SPEC.md`. Read it before starting any 
 - `js/sw-client.js`: service worker registration, update detection, app version lookup.
 - `js/db.js`: the **only** module that talks to IndexedDB.
 - `js/backup.js`: backup export/import orchestration (share sheet, files).
-- `js/ui/`: small DOM helpers (`el()`, banner/toast, confirm dialog, export button).
+- `js/exercises.js`: the exercise library's data access (loads `data/exercises.json`, merges it with my custom exercises and overrides, saves my changes).
+- `js/ui/`: small DOM helpers (`el()`, banner/toast, confirm dialog, export button, chips and the muscle picker).
 - `js/views/`: one module per screen, each exporting `mount(container, params)` that returns a cleanup function. Sub-screens are routes inside the app (e.g. `#/settings/selfcheck`), never separate HTML pages: the installed app must not navigate away from `index.html`.
 - `js/selfcheck.js`: the database self-check, shown by `js/views/selfcheck.js`.
-- `js/logic/`: pure functions with no DOM and no IndexedDB (`dates.js`, `schema.js`, `backup.js`; later muscle volume, e1RM, progression, warm-up sets, calendar plan).
-- `data/exercises.json` (Phase 1): a vendored copy of free-exercise-db (public domain / Unlicense). The source commit is noted in `data/README.md`.
+- `js/logic/`: pure functions with no DOM and no IndexedDB (`dates.js`, `schema.js`, `backup.js`, `muscles.js`, `exercises.js`, `sets.js`; later muscle volume, e1RM, progression, warm-up sets, calendar plan). `sets.js` defines what a working set is and how weights are written; use it everywhere.
+- `data/exercises.json`: a vendored, unmodified copy of free-exercise-db (public domain / Unlicense). The source commit, checksum and update steps are in `data/README.md`. Never edit it by hand.
 - `lib/` (Phase 5): vendored third-party code.
-- `tests/`: Node tests for `js/logic/`, plus `fixtures/` (one backup per schema version, kept forever).
+- `tests/`: Node tests for `js/logic/` and the dataset, plus `fixtures/` (one backup per schema version, and `exercise-ids.json`, the list of every exercise ID that has shipped; both kept forever).
 - `tests/browser/`: a standalone page running the same self-check on the PC. Not part of the app shell.
 - `tools/make_icons.py`: one-off icon generator (Python standard library only).
 - `tools/browser/`: the browser checks. `check.mjs` is the list of checks, `cdp.mjs` drives the headless browser (helpers: `goto`, `eval`, `waitFor`, `dark`, `pickFiles`, `screenshot`), `server.mjs` is a static server the checks can stop (offline) and that can serve `sw.js` with another version (update banner). Node built-ins only; not part of the app shell. The server must keep listening on `127.0.0.1` only and refusing hidden files.

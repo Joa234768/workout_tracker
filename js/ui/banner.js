@@ -15,6 +15,7 @@ export function showBanner({ id, text, onTap }) {
 
 /** A short message that disappears by itself. */
 export function toast(text, ms = 3500) {
+  for (const old of document.querySelectorAll('.toast')) old.remove(); // only the latest message shows
   const node = el('div', { class: 'toast', role: 'status', text });
   // An open modal dialog covers the banner slot, so show the toast inside it.
   const dialog = document.querySelector('dialog[open]');

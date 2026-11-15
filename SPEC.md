@@ -18,13 +18,13 @@ Tick items off (`- [x]`) as they're completed. Build in phase order. Each phase 
 - [x] "Last backup: N days ago" shown under the backup button. A gentle reminder when it's been more than 14 days (interval adjustable).
 
 ## Phase 1 — Exercise library
-- [ ] Vendor free-exercise-db's `exercises.json` into `data/`, noting the source commit. It's data only, with no code from the dataset.
-- [ ] Browse and search exercises by name.
-- [ ] **Filter by muscle group** with easy tap chips (primary muscle, with an option to include secondary). Also filter by equipment.
-- [ ] **Favourites** (a star) plus a "My exercises" filter. Recently used exercises sort to the top.
-- [ ] Exercise detail screen: muscles (primary/secondary), equipment, instructions from the dataset, and my history for that exercise.
-- [ ] **Edit an exercise's muscle tags.** Stored as an override, so the dataset itself is never modified.
-- [ ] Create custom exercises (name, equipment, primary/secondary muscles).
+- [x] Vendor free-exercise-db's `exercises.json` into `data/`, noting the source commit. It's data only, with no code from the dataset.
+- [x] Browse and search exercises by name.
+- [x] **Filter by muscle group** with easy tap chips (primary muscle, with an option to include secondary). Also filter by equipment.
+- [x] **Favourites** (a star) plus a "My exercises" filter. Recently used exercises sort to the top.
+- [x] Exercise detail screen: muscles (primary/secondary), equipment, instructions from the dataset, and my history for that exercise.
+- [x] **Edit an exercise's muscle tags.** Stored as an override, so the dataset itself is never modified.
+- [x] Create custom exercises (name, equipment, primary/secondary muscles).
 
 ## Phase 2 — Logging workouts
 - [ ] Start a workout: from a planned/routine workout, or as an empty workout.

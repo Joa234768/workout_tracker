@@ -47,9 +47,10 @@ export function startRouter({ container, titleEl, backEl, tabEls, routes, fallba
       if (tab.dataset.tab === name) tab.setAttribute('aria-current', 'page');
       else tab.removeAttribute('aria-current');
     }
-    // An installed iPhone app has no browser back button, so sub-screens get one.
+    // An installed iPhone app has no browser back button, so sub-screens get
+    // one. It goes up one level: #/exercises/<id>/muscles → #/exercises/<id>.
     backEl.hidden = segments.length < 2;
-    backEl.href = `#/${name}`;
+    backEl.href = `#/${segments.slice(0, -1).map(encodeURIComponent).join('/')}`;
 
     window.scrollTo(0, 0);
     try {
