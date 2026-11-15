@@ -1,6 +1,7 @@
 // Startup: wire the tab bar and start the router.
 
 import { startRouter } from './router.js';
+import { registerServiceWorker } from './sw-client.js';
 import * as today from './views/today.js';
 import * as calendar from './views/calendar.js';
 import * as progress from './views/progress.js';
@@ -23,3 +24,5 @@ startRouter({
   routes,
   fallback: 'today',
 });
+
+registerServiceWorker();

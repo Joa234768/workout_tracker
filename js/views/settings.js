@@ -1,6 +1,19 @@
-import { placeholder } from '../ui/dom.js';
+import { el, section } from '../ui/dom.js';
+import { getAppVersion } from '../sw-client.js';
 
 export function mount(container) {
-  placeholder(container, 'Settings', 'Backup, app version and preferences will live here.');
-  return () => {};
+  let alive = true;
+
+  const versionValue = el('span', { class: 'value', text: '…' });
+  container.append(
+    section('About', el('div', { class: 'row' }, el('span', { text: 'Version' }), versionValue))
+  );
+
+  getAppVersion().then((version) => {
+    if (alive) versionValue.textContent = version || 'unknown';
+  });
+
+  return () => {
+    alive = false;
+  };
 }
