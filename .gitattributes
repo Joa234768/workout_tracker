@@ -1,0 +1,3 @@
+# Keep LF line endings everywhere, so the files on this PC match what GitHub Pages serves.
+* text=auto eol=lf
+*.png binary
