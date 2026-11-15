@@ -60,12 +60,12 @@ Tick items off (`- [x]`) as they're completed. Build in phase order. Each phase 
 - [x] Look back at previous weeks.
 
 ## Phase 5 — Progress and stats (Chart.js, vendored)
-- [ ] Per-exercise charts: **estimated 1RM** (best per session), **top set weight**, **volume** (kg × reps over working sets).
+- [x] Per-exercise charts: **estimated 1RM** (best per session), **top set weight**, **volume** (kg × reps over working sets).
   - e1RM uses the Epley formula: `weight × (1 + reps / 30)`, only for sets with reps ≤ 12, warm-ups excluded. A small info note explains that it's an estimate.
-- [ ] Time range filters: 1 month · 3 months · 1 year · all.
-- [ ] Tapping a chart point opens that workout.
-- [ ] Training frequency: workouts per week over time, and planned vs. completed. No streaks.
-- [ ] **Body weight log** with a chart and a 7-day moving average trend line.
+- [x] Time range filters: 1 month · 3 months · 1 year · all.
+- [x] Tapping a chart point opens that workout.
+- [x] Training frequency: workouts per week over time, and planned vs. completed. No streaks.
+- [x] **Body weight log** with a chart and a 7-day moving average trend line.
 
 ## Phase 6 — Smart helpers and extras
 - [ ] **Progression suggestions (double progression):** each routine exercise has a rep range (default 8–12) and a weight increment (default 2.5 kg, editable per exercise).

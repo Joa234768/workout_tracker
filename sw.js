@@ -3,7 +3,7 @@
 // APP_VERSION is defined here and only here. Every release bumps it: the
 // browser detects an update by comparing this file byte for byte, and the
 // version names the cache. The Settings screen asks this worker for it.
-const APP_VERSION = '0.8.0';
+const APP_VERSION = '0.9.0';
 
 const CACHE_PREFIX = 'shell-v';
 const CACHE_NAME = `${CACHE_PREFIX}${APP_VERSION}`;
@@ -23,6 +23,7 @@ const PRECACHE = [
   './icons/icon-maskable-512.png',
   './js/app.js',
   './js/backup.js',
+  './js/body.js',
   './js/db.js',
   './js/exercises.js',
   './js/plan.js',
@@ -39,10 +40,12 @@ const PRECACHE = [
   './js/logic/routines.js',
   './js/logic/schema.js',
   './js/logic/sets.js',
+  './js/logic/stats.js',
   './js/logic/volume.js',
   './js/logic/workout.js',
   './js/ui/banner.js',
   './js/ui/body-map.js',
+  './js/ui/chart.js',
   './js/ui/chips.js',
   './js/ui/dialog.js',
   './js/ui/dom.js',
@@ -58,6 +61,11 @@ const PRECACHE = [
   './js/views/exercise-picker.js',
   './js/views/plan.js',
   './js/views/progress.js',
+  './js/views/progress-body.js',
+  './js/views/progress-exercises.js',
+  './js/views/progress-muscles.js',
+  './js/views/progress-nav.js',
+  './js/views/progress-training.js',
   './js/views/routine-editor.js',
   './js/views/exercises.js',
   './js/views/selfcheck.js',
@@ -66,6 +74,7 @@ const PRECACHE = [
   './js/views/workout-editor.js',
   './js/views/workout-summary.js',
   './js/views/workout.js',
+  './lib/chart.umd.min.js',
   './tests/fixtures/backup-v1.json',
 ];
 

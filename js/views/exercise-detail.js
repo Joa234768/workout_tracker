@@ -90,6 +90,9 @@ export function mount(container, { id }) {
         : el('p', { class: 'muted', text: 'No logged sets yet.' }),
       history.length > HISTORY_SHOWN
         ? el('p', { class: 'muted', text: `Showing the latest ${HISTORY_SHOWN} of ${history.length} sessions.` })
+        : null,
+      history.length
+        ? el('a', { class: 'btn secondary', href: `#/progress/exercises/${encodeURIComponent(exercise.id)}`, text: 'Progress charts' })
         : null
     );
 

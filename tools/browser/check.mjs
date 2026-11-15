@@ -26,6 +26,7 @@ import { mergeExercises, filterExercises } from '../../js/logic/exercises.js';
 import { addDays, addMonths, formatDate, formatShortDate, isoWeekday, monthGrid, monthLabel, todayStr, weekdayName } from '../../js/logic/dates.js';
 import { weekProgress, weekVolume, resolveTargets } from '../../js/logic/volume.js';
 import { formatKg } from '../../js/logic/sets.js';
+import { weeklyTraining, trainingSummary, rangeStart, movingAverage } from '../../js/logic/stats.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const PORT = Number(process.env.CHECK_PORT) || 8765;
@@ -1351,6 +1352,212 @@ async function run() {
     await page.waitFor(`location.hash === '#/today' && document.querySelector('.mini-bars li[data-group=chest] .nums')?.textContent === '3 / 10'`, { what: 'Today after discarding' });
   });
 
+  // ----- Phase 5: charts, training frequency, body weight -----
+  const CHART = `(window.Chart && Chart.getChart(document.querySelector('.chart-box canvas')))`;
+  const chartReady = (what) => page.waitFor(`!!${CHART} && !document.querySelector('.chart-box').hidden`, { what });
+  const chartData = (dataset = 0) => page.eval(`${CHART}.data.datasets[${dataset}].data`);
+  const tapChoice = (group, label) =>
+    page.eval(`[...document.querySelector('[aria-label=${js(group)}]').querySelectorAll('.chip')].find((c) => c.textContent === ${js(label)}).click()`);
+  const chosen = (group) => page.eval(`document.querySelector('[aria-label=${js(group)}] [aria-pressed=true]').textContent`);
+  const statTexts = () => page.eval(`[...document.querySelectorAll('.stat')].map((s) => [...s.children].map((c) => c.textContent))`);
+  const dayNo = (date) => Math.round((Date.parse(`${date}T00:00:00Z`) - Date.parse('2000-01-01T00:00:00Z')) / 86400000);
+  const ago = (n) => addDays(today, -n);
+  const olderBench = [
+    volumeWorkout('bench-70-days-ago', ago(70), [[BENCH, [doneSet({ kg: 30 })]]]),
+    volumeWorkout('bench-20-days-ago', ago(20), [[BENCH, [doneSet({ kg: 35, reps: 8 }), doneSet({ kg: 37.5, reps: 5 }), doneSet({ kg: 20, reps: 20 })]]]),
+  ];
+
+  await check('Exercise charts: estimated 1RM, top set and volume, time ranges, and a tap opens the workout', async () => {
+    await dbCall(`for (const workout of ${js(olderBench)}) await db.saveWorkout(workout);`);
+    await openApp('#/progress');
+    await page.waitFor(`document.querySelectorAll('.segmented .segment').length === 4`, { what: 'the Progress switch' });
+    equal(await page.eval(`[...document.querySelectorAll('.segmented .segment')].map((a) => [a.textContent, a.getAttribute('aria-current')])`),
+      [['Muscles', 'page'], ['Exercises', null], ['Training', null], ['Body', null]], 'the parts of Progress');
+    expect(!(await page.eval(`!!window.Chart`)), 'Chart.js was loaded before any chart was shown');
+    await page.eval(`[...document.querySelectorAll('.segment')].find((a) => a.textContent === 'Exercises').click()`);
+    await page.waitFor(`document.querySelectorAll('.list-row').length === 3`, { what: 'the logged exercises' });
+    const rows = await page.eval(`[...document.querySelectorAll('.list-row')].map((r) => [...r.querySelectorAll('span')].map((s) => s.textContent))`);
+    equal(rows[2], ['Barbell Squat', `1 session · last ${formatDate(lastWeek)}`], 'the exercise used longest ago comes last');
+    expect(rows.some((r) => r[0] === 'Barbell Bench Press - Medium Grip' && r[1] === `3 sessions · last ${formatDate(today)}`), `bench press row missing: ${js(rows)}`);
+    await shot('progress-exercises');
+
+    await page.eval(`[...document.querySelectorAll('.list-title')].find((n) => n.textContent.startsWith('Barbell Bench')).closest('a').click()`);
+    await chartReady('the bench press chart');
+    equal(await text('.detail-title'), 'Barbell Bench Press - Medium Grip', 'chart title');
+    equal(await page.eval(`[...document.querySelector('[aria-label="What to show"]').children].map((c) => c.textContent)`), ['Est. 1RM', 'Top set', 'Volume'], 'what can be charted');
+    equal([await chosen('What to show'), await chosen('Time range')], ['Est. 1RM', '3 mo'], 'what is shown first');
+    // Epley, sets of up to 12 reps, warm-ups left out: 30×10, the better of 35×8 and 37.5×5 (20×20 is ignored), 40×10.
+    const e1rms = [30 * (1 + 10 / 30), 35 * (1 + 8 / 30), 40 * (1 + 10 / 30)];
+    const dates = [ago(70), ago(20), today];
+    const close = (actual, expected, what) =>
+      expect(actual.length === expected.length && actual.every((p, i) => p.x === expected[i].x && Math.abs(p.y - expected[i].y) < 1e-9), `${what}: ${js(actual)} instead of ${js(expected)}`);
+    close(await chartData(), dates.map((date, i) => ({ x: dayNo(date), y: e1rms[i] })), 'estimated 1RM per session');
+    equal(await text('.card p[aria-live]'), `Latest: 53.3 kg (${formatDate(today)}) · Best: 53.3 kg (${formatDate(today)})`, 'summary line');
+    expect((await text('main > p.hint')).includes('It is an estimate'), 'the note explaining that the 1RM is an estimate is missing');
+    await noSidewaysScroll();
+    await shot('chart-e1rm-light');
+    await page.dark(true);
+    await page.sleep(300);
+    await shot('chart-e1rm-dark');
+    await page.dark(false);
+    await page.sleep(300);
+
+    await tapChoice('What to show', 'Top set');
+    await page.waitFor(`${CHART}.data.datasets[0].data[1]?.y === 37.5`, { what: 'the top set chart' });
+    close(await chartData(), dates.map((date, i) => ({ x: dayNo(date), y: [30, 37.5, 40][i] })), 'top set per session');
+    equal(await text('.card p[aria-live]'), `Latest: 40 kg × 10 (${formatDate(today)}) · Best: 40 kg × 10 (${formatDate(today)})`, 'top set summary');
+    await tapChoice('What to show', 'Volume');
+    await page.waitFor(`${CHART}.data.datasets[0].data[1]?.y === 35 * 8 + 37.5 * 5 + 20 * 20`, { what: 'the volume chart' });
+    close(await chartData(), dates.map((date, i) => ({ x: dayNo(date), y: [300, 867.5, 1200][i] })), 'volume per session');
+
+    await tapChoice('Time range', '1 mo');
+    await page.waitFor(`${CHART}.data.datasets[0].data.length === 2`, { what: 'the last month only' });
+    await tapChoice('Time range', 'All');
+    await page.waitFor(`${CHART}.data.datasets[0].data.length === 3`, { what: 'all sessions' });
+
+    // Tapping the middle point opens the workout of 20 days ago.
+    await page.eval(`(() => {
+      const chart = ${CHART};
+      const point = chart.getDatasetMeta(0).data[1];
+      const box = chart.canvas.getBoundingClientRect();
+      chart.canvas.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: box.left + point.x, clientY: box.top + point.y }));
+    })()`);
+    await page.waitFor(`location.hash === '#/calendar/bench-20-days-ago' && document.querySelector('.stat')`, { what: 'the workout behind the tapped point' });
+    equal(await text('.card-title'), `${weekdayName(ago(20))} ${formatDate(ago(20))}`, 'the opened workout');
+
+    // A bodyweight exercise charts reps instead; the choices are remembered per visit.
+    await goTo('#/progress/exercises/Pullups', `document.querySelector('[aria-label="What to show"]')`, 'the pull-up charts');
+    await chartReady('the pull-up chart');
+    equal(await page.eval(`[...document.querySelector('[aria-label="What to show"]').children].map((c) => c.textContent)`), ['Best set', 'Total reps'], 'charts of a bodyweight exercise');
+    equal(await chartData(), [{ x: dayNo(today), y: 10 }], 'best set in reps');
+    equal(await chosen('Time range'), 'All', 'the time range is remembered');
+    expect(!(await page.eval(`document.getElementById('back-button').hidden`)), 'no back arrow on the chart screen');
+
+    // The exercise's own page links to its charts.
+    await goTo(`#/exercises/${BENCH}`, `[...document.querySelectorAll('main a.btn')].some((a) => a.textContent === 'Progress charts')`, 'the link to the charts on the exercise page');
+    equal(await page.eval(`[...document.querySelectorAll('main a.btn')].find((a) => a.textContent === 'Progress charts').getAttribute('href')`), `#/progress/exercises/${BENCH}`, 'where the link goes');
+  });
+
+  await check('Training: workouts per week, and planned against done', async () => {
+    const yesterdayStr = ago(1);
+    await dbCall(`await db.put('plannedOneOffs', { id: 'missed-yesterday', date: ${js(yesterdayStr)}, routineId: null, cancelled: false });`);
+    const stores = JSON.parse(await dumpStores());
+    const data = { rules: stores.planRules, exceptions: stores.planExceptions, oneOffs: stores.plannedOneOffs, workouts: stores.workouts };
+    const expectedFor = (range) => weeklyTraining(rangeStart(range, today), today, data);
+    const threeMonths = expectedFor('3m');
+    const totals = trainingSummary(threeMonths);
+    equal([totals.done, threeMonths[threeMonths.length - 1].done >= 1, totals.due >= 1, totals.plannedDone < totals.due], [4, true, true, true],
+      'expected: four workouts in three months, one this week, and yesterday planned but missed');
+
+    await openApp('#/progress/training');
+    await chartReady('the training chart');
+    equal(await chartData(0), threeMonths.map((w) => w.done), 'finished workouts per week');
+    equal(await chartData(1), threeMonths.map((w) => w.planned || null), 'planned workouts per week (no mark when nothing was planned)');
+    equal(await page.eval(`${CHART}.data.labels.length`), threeMonths.length, 'one bar per week');
+    equal(await page.eval(`${CHART}.data.labels.at(-1)`), formatShortDate(addDays(today, 1 - isoWeekday(today)), today), 'the last bar is this week, named by its Monday');
+    equal(await statTexts(), [
+      ['4', 'workouts'],
+      [String(Math.round((4 / threeMonths.length) * 10) / 10), 'a week on average'],
+      [`${totals.plannedDone} of ${totals.due}`, 'planned workouts done'],
+    ], 'the numbers under the chart');
+    expect(await page.eval(`${CHART}.options.scales.y.beginAtZero === true && Object.keys(${CHART}.options.scales).length === 2`), 'the chart must start at zero and have one value axis');
+    await noSidewaysScroll();
+    await shot('training-light');
+    await page.dark(true);
+    await page.sleep(300);
+    await shot('training-dark');
+    await page.dark(false);
+    await page.sleep(300);
+
+    await tapChoice('Time range', '1 mo');
+    const month = expectedFor('1m');
+    await page.waitFor(`${CHART}.data.labels.length === ${month.length}`, { what: 'the last month' });
+    equal(await chartData(0), month.map((w) => w.done), 'finished workouts per week, last month');
+    equal((await statTexts())[0], ['3', 'workouts'], 'workouts in the last month');
+    await tapChoice('Time range', '3 mo');
+  });
+
+  await check('Body weight: one entry per day, validated, charted with a 7-day average, deletable', async () => {
+    // The fixture's entries have fixed dates; start from an empty log.
+    await dbCall(`for (const entry of await db.getAll('bodyWeights')) await db.remove('bodyWeights', entry.date);`);
+    await openApp('#/progress/body');
+    await page.waitFor(`document.getElementById('body-kg')`, { what: 'the body-weight screen' });
+    await page.waitFor(`document.querySelector('.chart-box').hidden`, { what: 'no chart while there are no entries' });
+    expect(await page.eval(`[...document.querySelectorAll('main p.muted')].some((p) => !p.hidden && p.textContent.startsWith('Save your weight'))`), 'the empty message is missing');
+    equal(await page.eval(`[document.getElementById('body-date').value, document.getElementById('body-date').max]`), [today, today], 'the date starts as today, and later days cannot be chosen');
+    expect(await page.eval(`['body-date', 'body-kg'].every((id) => parseFloat(getComputedStyle(document.getElementById(id)).fontSize) >= 16)`), 'a field is smaller than 16 px (iOS would zoom)');
+    const bodyWeights = () => dbCall(`return (await db.getAll('bodyWeights')).map((e) => [e.date, e.kg]);`);
+
+    await typeInto('#body-kg', '5');
+    await pressButton('Save weight');
+    await waitToast('Enter a weight between 20 and 400 kg.');
+    equal(await bodyWeights(), [], 'nothing is saved for an impossible weight');
+
+    await typeInto('#body-kg', '80,5'); // a Danish keyboard gives a comma
+    await pressButton('Save weight');
+    await waitToast('Weight saved.');
+    await chartReady('the chart after the first entry');
+    equal(await bodyWeights(), [[today, 80.5]], 'the first entry');
+    equal(await page.eval(`document.getElementById('body-kg').value`), '', 'the field is emptied after saving');
+    equal(await text('main p.muted:not([hidden])'), `${formatDate(today)} already has 80.5 kg. Saving replaces it.`, 'a note that today already has an entry');
+
+    await typeInto('#body-kg', '80');
+    await pressButton('Save weight');
+    await page.waitFor(`document.querySelector('.entry-list li .nums')?.textContent === '80 kg'`, { what: 'the replaced entry' });
+    equal(await bodyWeights(), [[today, 80]], 'saving the same day again replaces the entry');
+
+    // An earlier day through the form, then a run of days for the trend.
+    await page.eval(`(() => { const i = document.getElementById('body-date'); i.value = ${js(ago(1))}; i.dispatchEvent(new Event('change')); })()`);
+    await typeInto('#body-kg', '81.2');
+    await pressButton('Save weight');
+    await page.waitFor(`document.querySelectorAll('.entry-list li').length === 2`, { what: 'two entries' });
+    const earlier = [[ago(2), 82], [ago(3), 81], [ago(5), 83], [ago(9), 84], [ago(40), 86]];
+    await dbCall(`for (const [date, kg] of ${js(earlier)}) await db.put('bodyWeights', { date, kg, updatedAt: new Date().toISOString() });`);
+    await openApp('#/progress/body');
+    await chartReady('the body-weight chart');
+    const all = [[today, 80], [ago(1), 81.2], ...earlier].map(([date, kg]) => ({ date, kg }));
+    const inThreeMonths = all.slice().sort((a, b) => (a.date < b.date ? -1 : 1));
+    const trend = movingAverage(all);
+    const near = (actual, expected, what) =>
+      expect(actual.length === expected.length && actual.every((p, i) => p.x === dayNo(expected[i].date) && Math.abs(p.y - expected[i].kg) < 1e-9), `${what}: ${js(actual)} instead of ${js(expected)}`);
+    equal(await page.eval(`${CHART}.data.datasets.map((d) => d.label)`), ['7-day average', 'Entries'], 'the two lines of the chart');
+    near(await chartData(1), inThreeMonths, 'the entries');
+    near(await chartData(0), trend, 'the 7-day average');
+    equal(trend.at(-1).kg, (80 + 81.2 + 82 + 81 + 83) / 5, 'the average of the last seven days uses the five entries in them');
+    const fmt = (n) => String(Math.round(n * 10) / 10);
+    equal(await statTexts(), [
+      ['80 kg', `latest · ${formatDate(today)}`],
+      [`${fmt(trend.at(-1).kg)} kg`, '7-day average'],
+      [`−${fmt(86 - trend.at(-1).kg)} kg`, 'change of the average'],
+    ], 'the numbers under the chart');
+    equal(await page.eval(`[...document.querySelectorAll('.entry-list li')].map((li) => [li.dataset.date, li.querySelector('.nums').textContent])`),
+      all.sort((a, b) => (a.date < b.date ? 1 : -1)).map((e) => [e.date, `${formatKg(e.kg)} kg`]), 'the entries listed latest first');
+    await noSidewaysScroll();
+    await shot('body-light');
+    await page.dark(true);
+    await page.sleep(300);
+    await shot('body-dark');
+    await page.dark(false);
+    await page.sleep(300);
+    await page.eval(`document.querySelector('.entry-list').scrollIntoView({ block: 'start' }); window.scrollBy(0, -120)`);
+    await shot('body-entries');
+
+    await tapChoice('Time range', '1 mo');
+    await page.waitFor(`${CHART}.data.datasets[1].data.length === 6`, { what: 'the last month of entries' });
+    near(await chartData(0), trend.slice(1), 'the average within the last month');
+
+    await page.eval(`document.querySelector('.entry-list li[data-date=${js(ago(40))}] .icon-button').click()`);
+    await page.waitFor(DIALOG, { what: 'the delete confirmation' });
+    expect((await dialogText()).includes(`86 kg on ${formatDate(ago(40))}`), `the confirmation says: ${await dialogText()}`);
+    await pressInDialog('Delete');
+    await page.waitFor(`document.querySelectorAll('.entry-list li').length === 6`, { what: 'the entry to be deleted' });
+    equal((await bodyWeights()).length, 6, 'stored entries after deleting one');
+
+    // The log is part of the backup.
+    const backup = JSON.parse(await dumpStores());
+    equal(backup.bodyWeights.map((e) => e.date).sort(), all.map((e) => e.date).filter((d) => d !== ago(40)).sort(), 'body weights in a backup');
+  });
+
   await check('Update: a new version shows the banner, and tapping it loads the new version', async () => {
     const next = '999.0.0';
     server.state.swVersion = next;
@@ -1390,6 +1597,7 @@ async function run() {
     await goTo('#/calendar/history', `document.querySelectorAll('.list-row').length >= 1`, 'the workout history offline');
     await goTo('#/calendar', `document.querySelectorAll('.month-grid .day').length === 42`, 'the month view offline');
     await goTo('#/calendar/plan', `document.querySelector('.card-title')?.textContent === 'Weekly plan'`, 'the plan offline');
+    await goTo('#/progress/body', `window.Chart && Chart.getChart(document.querySelector('.chart-box canvas')) && document.querySelectorAll('.entry-list li').length === 6`, 'a chart offline (Chart.js comes from the cache)');
     await goTo('#/today', `[...document.querySelectorAll('main .btn')].some((b) => b.textContent.startsWith('Start a'))`, 'Today offline');
     await page.eval(`[...document.querySelectorAll('main .btn')].find((b) => b.textContent.startsWith('Start a')).click()`);
     await page.waitFor(DIALOG, { what: 'the choice of routines offline' });

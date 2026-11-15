@@ -472,6 +472,24 @@ input.input[type="date"] { width: 100%; -webkit-appearance: none; appearance: no
 .body-region.empty { fill: var(--muted); fill-opacity: 0.22; }
 .body-region.selected, .body-region:focus-visible { stroke: var(--text); stroke-width: 1; }
 
+/* ---------- Charts and the body-weight log ---------- */
+
+.segmented.four { grid-template-columns: repeat(4, 1fr); }
+.segmented.four .segment { font-size: 14px; }
+
+.chip-even { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: var(--s-2); }
+.chip-even .chip { justify-content: center; padding-left: var(--s-1); padding-right: var(--s-1); }
+
+.chart-box { position: relative; height: 240px; }
+.chart-box canvas { touch-action: pan-y; }
+.chart-message { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; }
+
+.entry-list { list-style: none; margin: 0; padding: 0; }
+.entry-list li { display: flex; align-items: center; gap: var(--s-3); min-height: var(--tap); border-top: 1px solid var(--border); }
+.entry-list li:first-child { border-top: 0; }
+.entry-list-date { flex: 1; min-width: 0; display: flex; flex-direction: column; font-variant-numeric: tabular-nums; }
+.entry-list-date .muted { font-size: var(--fs-small); }
+
 /* A radio option with an explanation underneath. */
 .option { display: flex; align-items: flex-start; gap: var(--s-3); min-height: var(--tap); padding: var(--s-2) 0; cursor: pointer; }
 .option input { flex: none; width: 22px; height: 22px; margin: 1px 0 0; accent-color: var(--accent); }
