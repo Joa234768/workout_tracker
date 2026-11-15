@@ -16,6 +16,9 @@ export function showBanner({ id, text, onTap }) {
 /** A short message that disappears by itself. */
 export function toast(text, ms = 3500) {
   const node = el('div', { class: 'toast', role: 'status', text });
-  slot().prepend(node);
+  // An open modal dialog covers the banner slot, so show the toast inside it.
+  const dialog = document.querySelector('dialog[open]');
+  if (dialog) dialog.append(node);
+  else slot().prepend(node);
   setTimeout(() => node.remove(), ms);
 }

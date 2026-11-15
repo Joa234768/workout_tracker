@@ -5,13 +5,29 @@ import { getAppVersion } from '../sw-client.js';
 import { db } from '../db.js';
 import { SCHEMA_VERSION } from '../logic/schema.js';
 import { formatTimestampDate } from '../logic/dates.js';
+import { confirmDialog } from '../ui/dialog.js';
+import { BackupError } from '../logic/backup.js';
 import {
   BACKUP_CHANGED, notifyBackupChanged, getBackupStatus,
   prepareBackupFile, preparePremigrationFile, getPremigrationDate,
+  readBackupFile, importBackup,
 } from '../backup.js';
 
 const MIN_REMINDER_DAYS = 1;
 const MAX_REMINDER_DAYS = 365;
+
+// [store, singular, plural] — what the import confirmation calls each store.
+const STORE_LABELS = [
+  ['workouts', 'workout', 'workouts'],
+  ['routines', 'routine', 'routines'],
+  ['planRules', 'plan', 'plans'],
+  ['planExceptions', 'plan change', 'plan changes'],
+  ['plannedOneOffs', 'one-off planned workout', 'one-off planned workouts'],
+  ['customExercises', 'custom exercise', 'custom exercises'],
+  ['exerciseOverrides', 'edited exercise', 'edited exercises'],
+  ['bodyWeights', 'body-weight entry', 'body-weight entries'],
+  ['settings', 'setting', 'settings'],
+];
 
 export function mount(container) {
   let alive = true;
@@ -34,6 +50,64 @@ export function mount(container) {
   }
   const onBackupChanged = () => refreshStatus().catch(showError);
   window.addEventListener(BACKUP_CHANGED, onBackupChanged);
+
+  // ----- Backup: import -----
+  const fileInput = el('input', {
+    class: 'visually-hidden',
+    type: 'file',
+    accept: '.json,application/json',
+    'aria-label': 'Import backup',
+  });
+  const importLabel = el('label', { class: 'btn secondary' }, 'Import backup', fileInput);
+
+  async function handleFile(file) {
+    let checked;
+    try {
+      checked = await readBackupFile(file);
+    } catch (err) {
+      const message = err instanceof BackupError ? err.message : 'This file could not be read.';
+      if (!(err instanceof BackupError)) console.error(err);
+      await confirmDialog({ title: 'Not imported', lines: [message, 'Nothing was changed.'], cancelLabel: null });
+      return;
+    }
+
+    const { summary } = checked;
+    const contents = STORE_LABELS.filter(([name]) => summary.counts[name] > 0).map(
+      ([name, one, many]) => `${summary.counts[name]} ${summary.counts[name] === 1 ? one : many}`
+    );
+    const confirmed = await confirmDialog({
+      title: 'Replace all data?',
+      lines: [
+        `This backup is from ${formatTimestampDate(summary.exportedAt)}.`,
+        contents.length ? `It contains ${contents.join(', ')}.` : 'It contains no data.',
+        'Everything currently in the app will be replaced by the backup. This cannot be undone.',
+      ],
+      confirmLabel: 'Replace my data',
+      danger: true,
+      extra: exportButton({ label: 'Export current data first', prepare: prepareBackupFile, secondary: true }),
+    });
+    if (!confirmed) return;
+
+    try {
+      await importBackup(checked);
+    } catch (err) {
+      console.error(err);
+      await confirmDialog({
+        title: 'Not imported',
+        lines: ['The backup could not be restored.', 'Nothing was changed.'],
+        cancelLabel: null,
+      });
+      return;
+    }
+    await Promise.all([refreshStatus(), loadReminder()]);
+    toast('Backup restored.');
+  }
+
+  fileInput.addEventListener('change', () => {
+    const file = fileInput.files && fileInput.files[0];
+    fileInput.value = ''; // so the same file can be picked again
+    if (file) handleFile(file).catch(showError);
+  });
 
   // ----- Backup: reminder interval -----
   const reminderInput = el('input', {
@@ -92,6 +166,7 @@ export function mount(container) {
     'Backup',
     exportButton({ label: 'Export backup', prepare: prepareBackupFile }),
     lastBackupLine,
+    importLabel,
     el('hr', { class: 'divider' }),
     el('div', { class: 'row' },
       el('label', { for: 'reminder-days', text: 'Remind me after (days)' }),

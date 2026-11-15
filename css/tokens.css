@@ -15,6 +15,7 @@
   --accent-contrast: #FFFFFF;
   --accent-soft: rgba(79, 91, 213, 0.12);
   --danger: #C8323F;
+  --danger-contrast: #FFFFFF;
   --ok: #1E8E5A;
   --bar-bg: rgba(246, 246, 248, 0.86);
 
@@ -52,6 +53,7 @@
     --accent-contrast: #0E0F12;
     --accent-soft: rgba(139, 148, 240, 0.16);
     --danger: #F0737E;
+    --danger-contrast: #0E0F12;
     --ok: #5CC894;
     --bar-bg: rgba(14, 15, 18, 0.86);
   }

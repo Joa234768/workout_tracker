@@ -3,7 +3,7 @@
 ## Project
 A personal workout tracker for one user (me). It's a mobile-first Progressive Web App (PWA): installed on my iPhone home screen and used at the gym, often without internet. It's hosted free on GitHub Pages from this repo (`main` branch, root folder).
 
-The full feature list and roadmap are in `SPEC.md`. Read it before starting any feature.
+The full feature list and roadmap are in `SPEC.md`. Read it before starting any feature. The data model, backup format and the decisions behind them are in `docs/DATA_MODEL.md`. Read it before touching stored data.
 
 ## Hard constraints
 - **No backend:** no accounts, no analytics, no runtime network calls except fetching the app's own files from this same site.
@@ -14,24 +14,33 @@ The full feature list and roadmap are in `SPEC.md`. Read it before starting any 
 - **All personal data lives on the device in IndexedDB.** Nothing personal is ever committed to the repo.
 
 ## Commands
-- Local dev server: `python3 -m http.server 8000`, then open `http://localhost:8000`. Service workers need a server, so double-clicking `index.html` won't work.
+- Local dev server: `py -m http.server 8000` (on this PC Python runs as `py`), then open `http://localhost:8000`. Service workers need a server, so double-clicking `index.html` won't work. On localhost the service worker prefers the network, so edits show up on reload.
 - Logic tests: `node --test tests/`. This uses Node's built-in test runner and needs no installs.
+- Database self-check: open `http://localhost:8000/tests/browser/` (also linked from Settings). It round-trips every store and tests upgrades in scratch databases, in a real browser.
+- Icons: `py tools/make_icons.py` regenerates `icons/`.
 
-## Proposed structure (keep this section updated if it changes)
-- `index.html`: the app shell.
-- `manifest.webmanifest`, `sw.js`, `icons/`: the PWA files.
-- `css/`: styles. Theming goes through CSS variables.
-- `js/app.js`: startup and tab routing.
+## Structure (keep this section updated if it changes)
+- `index.html`: the app shell (header, `<main id="view">`, banner slot, tab bar).
+- `manifest.webmanifest`, `sw.js`, `icons/`, `.nojekyll`: the PWA files. All URLs are relative (`./…`), because the site is served from a subpath.
+- `css/tokens.css`: CSS variables (colours for light and dark, spacing, type). `css/app.css`: layout and shared components.
+- `js/app.js`: startup (open the database, `persist()`, register the service worker, start the router).
+- `js/router.js`: hash router (`#/today`, `#/settings`, later `#/exercises/<id>`). The first segment picks the tab.
+- `js/sw-client.js`: service worker registration, update detection, app version lookup.
 - `js/db.js`: the **only** module that talks to IndexedDB.
-- `js/views/`: one module per screen.
-- `js/logic/`: pure functions with no DOM access (muscle volume, e1RM, progression, warm-up sets, calendar plan).
-- `data/exercises.json`: a vendored copy of free-exercise-db (public domain / Unlicense). The source commit is noted in `data/README.md`.
-- `lib/`: vendored third-party code.
-- `tests/`: tests for `js/logic/`.
+- `js/backup.js`: backup export/import orchestration (share sheet, files).
+- `js/ui/`: small DOM helpers (`el()`, banner/toast, confirm dialog, export button).
+- `js/views/`: one module per screen, each exporting `mount(container, params)` that returns a cleanup function.
+- `js/logic/`: pure functions with no DOM and no IndexedDB (`dates.js`, `schema.js`, `backup.js`; later muscle volume, e1RM, progression, warm-up sets, calendar plan).
+- `data/exercises.json` (Phase 1): a vendored copy of free-exercise-db (public domain / Unlicense). The source commit is noted in `data/README.md`.
+- `lib/` (Phase 5): vendored third-party code.
+- `tests/`: Node tests for `js/logic/`, plus `fixtures/` (one backup per schema version, kept forever).
+- `tests/browser/`: the database self-check page. Not part of the app shell.
+- `tools/make_icons.py`: one-off icon generator (Python standard library only).
+- `docs/DATA_MODEL.md`: stores, backup format, migrations, and decisions for later phases.
 
 ## Data safety rules (most important)
 My training history can't be replaced. Therefore:
-- **The IndexedDB schema is versioned.** Every schema change bumps the version and ships a migration that keeps all existing data. Never delete or rename stored fields without a migration.
+- **The IndexedDB schema is versioned.** Every schema change bumps the version and ships a migration that keeps all existing data. Never delete or rename stored fields without a migration. The store list and migration steps live in `js/logic/schema.js`; each schema bump also adds a fixture backup of the old version to `tests/fixtures/` with a test that migrates it.
 - **Ask me before changing the schema.**
 - **Export/import must round-trip everything.** A backup contains every store, and import restores it exactly. Any change that adds a store or field updates export/import in the same commit.
 - **Backups carry a `schemaVersion`.** Importing an older backup runs the migrations.
@@ -52,7 +61,7 @@ My training history can't be replaced. Therefore:
 
 ## Conventions
 - **Weights:** kg only, stored as numbers (e.g. `12.5`). Display without trailing zeros.
-- **Dates:** `YYYY-MM-DD` strings for calendar days, full ISO timestamps for events. **Weeks run Monday–Sunday.**
+- **Dates:** shown to me as `DD-MM-YYYY` everywhere, including the backup filename; always format with `formatDate()` from `js/logic/dates.js`. Stored as `YYYY-MM-DD` strings for calendar days (this order must stay: IndexedDB sorts and range-searches them as text) and full ISO timestamps for events. Build day strings from local time, never from `toISOString()`. **Weeks run Monday–Sunday.**
 - **IDs:** `crypto.randomUUID()`.
 - **Security:** render any user-entered or imported text with `textContent`, never `innerHTML`.
 - **Logic:** calculations live in pure functions in `js/logic/` and have tests.
@@ -64,7 +73,9 @@ My training history can't be replaced. Therefore:
 - Work through `SPEC.md` one item at a time, in phase order. Tick items off (`- [x]`) when done.
 - For larger features, plan first. If a requirement is unclear, ask instead of guessing.
 - Keep commits small and focused, with clear messages.
-- **Every release bumps `APP_VERSION`,** defined in one place and used by both the service worker's cache name and the Settings screen. Otherwise the phone keeps serving the old version.
+- **Every release bumps `APP_VERSION`,** defined only at the top of `sw.js`. It names the service worker's cache, and the Settings screen asks the service worker for it. Otherwise the phone keeps serving the old version.
+- **Every new file under `css/`, `js/`, `icons/`, `lib/` or `data/` is added to `PRECACHE` in `sw.js`.** `tests/precache.test.js` fails if one is missing.
+- I test on the iPhone through GitHub Pages (`https://joa234768.github.io/workout_tracker/`), so finished work is pushed to `main`.
 - When a decision is made that future sessions need to know, update this file (or `docs/DATA_MODEL.md` for data model details).
 
 ## Definition of done

@@ -7,15 +7,15 @@ Tick items off (`- [x]`) as they're completed. Build in phase order. Each phase 
 ---
 
 ## Phase 0 — Foundation
-- [ ] PWA shell: `manifest.webmanifest`, app icons, `apple-touch-icon`, standalone mode, service worker caching the app shell for offline use.
-- [ ] `APP_VERSION` shown in Settings. When a new version is waiting, show a small **"Update available — tap to reload"** banner.
-- [ ] Bottom tab bar, always visible, thumb-friendly. Proposed tabs: **Today · Calendar · Progress · Exercises · Settings**. The plan may propose a better split.
-- [ ] Theme follows the system light/dark setting.
-- [ ] IndexedDB layer (`js/db.js`) with a versioned schema and a migration framework.
-- [ ] Request persistent storage on startup.
-- [ ] **Backup export:** a full JSON backup (all stores plus `schemaVersion`), saved via the share sheet → "Save to Files" (iCloud Drive). Filename: `workout-backup-YYYY-MM-DD.json`.
-- [ ] **Backup import:** pick a file from the Files app, validate it, ask for confirmation (offering to export current data first), migrate if older, then restore.
-- [ ] "Last backup: N days ago" shown under the backup button. A gentle reminder when it's been more than 14 days (interval adjustable).
+- [x] PWA shell: `manifest.webmanifest`, app icons, `apple-touch-icon`, standalone mode, service worker caching the app shell for offline use.
+- [x] `APP_VERSION` shown in Settings. When a new version is waiting, show a small **"Update available — tap to reload"** banner.
+- [x] Bottom tab bar, always visible, thumb-friendly. Proposed tabs: **Today · Calendar · Progress · Exercises · Settings**. The plan may propose a better split.
+- [x] Theme follows the system light/dark setting.
+- [x] IndexedDB layer (`js/db.js`) with a versioned schema and a migration framework.
+- [x] Request persistent storage on startup.
+- [x] **Backup export:** a full JSON backup (all stores plus `schemaVersion`), saved via the share sheet → "Save to Files" (iCloud Drive). Filename: `workout-backup-DD-MM-YYYY.json`.
+- [x] **Backup import:** pick a file from the Files app, validate it, ask for confirmation (offering to export current data first), migrate if older, then restore.
+- [x] "Last backup: N days ago" shown under the backup button. A gentle reminder when it's been more than 14 days (interval adjustable).
 
 ## Phase 1 — Exercise library
 - [ ] Vendor free-exercise-db's `exercises.json` into `data/`, noting the source commit. It's data only, with no code from the dataset.

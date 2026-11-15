@@ -3,7 +3,7 @@
 // APP_VERSION is defined here and only here. Every release bumps it: the
 // browser detects an update by comparing this file byte for byte, and the
 // version names the cache. The Settings screen asks this worker for it.
-const APP_VERSION = '0.3.0';
+const APP_VERSION = '0.4.0';
 
 const CACHE_PREFIX = 'shell-v';
 const CACHE_NAME = `${CACHE_PREFIX}${APP_VERSION}`;
@@ -29,6 +29,7 @@ const PRECACHE = [
   './js/logic/dates.js',
   './js/logic/schema.js',
   './js/ui/banner.js',
+  './js/ui/dialog.js',
   './js/ui/dom.js',
   './js/ui/export-button.js',
   './js/views/today.js',

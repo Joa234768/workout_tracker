@@ -5,7 +5,9 @@ import { db } from './db.js';
 import { getAppVersion } from './sw-client.js';
 import { SCHEMA_VERSION } from './logic/schema.js';
 import { formatTimestampDate } from './logic/dates.js';
-import { buildBackup, backupFilename, backupStatus } from './logic/backup.js';
+import {
+  buildBackup, backupFilename, backupStatus, parseBackup, prepareImport, summarizeBackup,
+} from './logic/backup.js';
 
 /** Fired on window whenever the "last backup" state may have changed. */
 export const BACKUP_CHANGED = 'backup-changed';
@@ -59,6 +61,22 @@ export async function preparePremigrationFile() {
 export async function getPremigrationDate() {
   const copy = await db.getPremigrationCopy();
   return copy ? copy.savedAt : null;
+}
+
+/**
+ * Reads and fully checks a picked file, without changing anything.
+ * Returns { backup, summary, data } where `data` is exactly what an import
+ * would write. Throws BackupError (message is for the user) if it is refused.
+ */
+export async function readBackupFile(file) {
+  const backup = parseBackup(await file.text());
+  return { backup, summary: summarizeBackup(backup), data: prepareImport(backup) };
+}
+
+/** Replaces all data with a checked backup, in one transaction. */
+export async function importBackup(checked) {
+  await db.replaceAll(checked.data);
+  notifyBackupChanged();
 }
 
 function download(file) {
