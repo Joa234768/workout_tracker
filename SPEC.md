@@ -30,11 +30,11 @@ Tick items off (`- [x]`) as they're completed. Build in phase order. Each phase 
 - [ ] Start a workout: from a planned/routine workout, or as an empty workout.
 - [ ] Per exercise, a list of set rows: **set # · kg · reps · warm-up toggle · done ✓**. A "+ Add set" button. A routine pre-fills the number of sets. Each set can have its own weight and reps (e.g. 10 kg × 10, 8 kg × 12, 6 kg × 10).
 - [ ] **Last time's numbers, shown unobtrusively:**
-  - A muted grey line under the exercise name, e.g. `Last · 12 Nov: 10×10 · 8×12 · 6×10`.
+  - A muted grey line under the exercise name, e.g. `Last · 12 Nov: 10×10 · 12×8 · 10×6`.
   - Last time's matching set appears as grey **placeholder text** in the kg/reps fields.
   - Tapping ✓ on an empty row accepts the placeholder values. "Copy previous set" fills a row with the set above it.
 - [ ] Warm-up toggle per set. Warm-up sets are excluded from volume, e1RM and progression.
-- [ ] Notes: per workout, per exercise and per set.
+- [ ] Notes: per workout.
 - [ ] Add, remove and reorder exercises during a workout.
 - [ ] **An in-progress workout survives closing the app** (saved on every change). On reopening, the app resumes it.
 - [ ] Optional **manual duration** field (typed in minutes). No running timer.

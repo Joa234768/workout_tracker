@@ -1,7 +1,7 @@
 # CLAUDE.md — Workout Tracker
 
 ## Project
-A personal workout tracker for one user (me). It's a mobile-first Progressive Web App (PWA): installed on my iPhone home screen and used one-handed at the gym, often without internet. It's hosted free on GitHub Pages from this repo (`main` branch, root folder).
+A personal workout tracker for one user (me). It's a mobile-first Progressive Web App (PWA): installed on my iPhone home screen and used at the gym, often without internet. It's hosted free on GitHub Pages from this repo (`main` branch, root folder).
 
 The full feature list and roadmap are in `SPEC.md`. Read it before starting any feature.
 
@@ -10,7 +10,7 @@ The full feature list and roadmap are in `SPEC.md`. Read it before starting any 
 - **Fully offline after first load.** A service worker caches the app shell.
 - **Plain HTML, CSS and JavaScript (ES modules).** No build step, no bundler, no framework, no npm dependencies. GitHub Pages must be able to serve the repo exactly as it is.
 - **No CDNs.** Third-party code is vendored into `/lib/`, with its version and license noted in `/lib/README.md`. Currently approved: **Chart.js**. Ask before adding anything else.
-- **Target device: iPhone, Safari, running as an installed home-screen app** (standalone mode). Design for 375–430 px width.
+- **Target device: iPhone, Safari, running as an installed home-screen app** (standalone mode). Design for 375–430 px width. 
 - **All personal data lives on the device in IndexedDB.** Nothing personal is ever committed to the repo.
 
 ## Commands
