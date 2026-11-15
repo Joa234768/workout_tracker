@@ -32,12 +32,13 @@ The full feature list and roadmap are in `SPEC.md`. Read it before starting any 
 - `js/db.js`: the **only** module that talks to IndexedDB.
 - `js/backup.js`: backup export/import orchestration (share sheet, files).
 - `js/workouts.js`: workouts' data access (start, save on every change, finish, list, delete).
+- `js/plan.js`: routines and the calendar plan (weekly plan versions, single-day changes, one-off workouts).
 - `js/exercises.js`: the exercise library's data access (loads `data/exercises.json`, merges it with my custom exercises and overrides, saves my changes).
 - `js/ui/`: small DOM helpers (`el()`, banner/toast, confirm dialog, export button, chips and the muscle picker).
 - `js/views/`: one module per screen, each exporting `mount(container, params)` that returns a cleanup function. Sub-screens are routes inside the app (e.g. `#/settings/selfcheck`), never separate HTML pages: the installed app must not navigate away from `index.html`.
 - `js/selfcheck.js`: the database self-check, shown by `js/views/selfcheck.js`.
-- Screens outside the five tabs: `#/workout` (the workout in progress, under the Today tab). Workout history, summaries and editing live under `#/calendar/<id>`. `js/views/workout-editor.js` is shared by the workout in progress and editing a past workout.
-- `js/logic/`: pure functions with no DOM and no IndexedDB (`dates.js`, `schema.js`, `backup.js`, `muscles.js`, `exercises.js`, `sets.js`, `workout.js`, `volume.js`; later e1RM, progression, warm-up sets, calendar plan). `sets.js` defines what a working set is and how weights are written; use it everywhere.
+- Screens outside the five tabs: `#/workout` (the workout in progress, under the Today tab). Under the Calendar tab: the month view (`#/calendar`), the history list (`#/calendar/history`), plan and routines (`#/calendar/plan`, `#/calendar/routines/<id>`), and workout summaries and editing (`#/calendar/<workoutId>`). The full list is at the top of `js/views/calendar.js`. `js/views/workout-editor.js` is shared by the workout in progress and editing a past workout.
+- `js/logic/`: pure functions with no DOM and no IndexedDB (`dates.js`, `schema.js`, `backup.js`, `muscles.js`, `exercises.js`, `sets.js`, `workout.js`, `volume.js`, `routines.js`, `plan.js`; later e1RM, progression, warm-up sets). `plan.js` computes every calendar day from the plan rules; nothing is pre-generated. `sets.js` defines what a working set is and how weights are written; use it everywhere.
 - `data/exercises.json`: a vendored, unmodified copy of free-exercise-db (public domain / Unlicense). The source commit, checksum and update steps are in `data/README.md`. Never edit it by hand.
 - `lib/` (Phase 5): vendored third-party code.
 - `tests/`: Node tests for `js/logic/` and the dataset, plus `fixtures/` (one backup per schema version, and `exercise-ids.json`, the list of every exercise ID that has shipped; both kept forever).
@@ -55,6 +56,7 @@ My training history can't be replaced. Therefore:
 - **Before import overwrites data,** ask for confirmation and offer to export the current data first.
 - **Exercise IDs referenced by logged sets must stay stable forever.** Built-in exercises use the dataset's `id`. My edits (muscle tags, favourites) are stored as overrides, not by modifying the dataset.
 - **Call `navigator.storage.persist()` on startup.**
+- **Checks must not depend on the day they run.** The fixture backup has fixed dates; the browser checks move its workout to "a week ago" and build their own plan relative to today.
 - **Save an in-progress workout to IndexedDB on every change,** so closing the app never loses it.
 
 ## iPhone / Safari specifics
@@ -72,6 +74,7 @@ My training history can't be replaced. Therefore:
 - **Dates:** shown to me as `DD-MM-YYYY` everywhere, including the backup filename; always format with `formatDate()` from `js/logic/dates.js`. Stored as `YYYY-MM-DD` strings for calendar days (this order must stay: IndexedDB sorts and range-searches them as text) and full ISO timestamps for events. Build day strings from local time, never from `toISOString()`. **Weeks run Monday–Sunday.**
 - **IDs:** `crypto.randomUUID()`.
 - **Security:** render any user-entered or imported text with `textContent`, never `innerHTML`.
+- **Never pass a bare `null` to `append()`, `prepend()` or `replaceChildren()`:** the browser prints it as the text "null". Build optional children inside `el()` (which skips null), or spread an array (`...(show ? [node] : [])`). The browser checks fail on any stray "null", "undefined" or "NaN" on screen.
 - **Logic:** calculations live in pure functions in `js/logic/` and have tests.
 - **Theme:** follows the system light/dark setting (`prefers-color-scheme`).
 - **Design:** minimal but elegant. Generous spacing, one accent colour, clear type hierarchy, touch targets of at least 44 px. The most common actions are reachable with one thumb. Secondary information (like last session's numbers) is shown in muted grey, never in the way.

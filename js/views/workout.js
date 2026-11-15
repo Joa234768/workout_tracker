@@ -5,7 +5,7 @@
 import { el, section } from '../ui/dom.js';
 import { getActiveWorkout } from '../workouts.js';
 import { mountEditor } from './workout-editor.js';
-import { mountExercisePicker } from './exercise-picker.js';
+import { mountWorkoutExercisePicker } from './exercise-picker.js';
 
 export function mount(container, params = {}) {
   let alive = true;
@@ -27,7 +27,7 @@ export function mount(container, params = {}) {
         return;
       }
       cleanup = adding
-        ? mountExercisePicker(container, { workout, returnPath: '#/workout' })
+        ? mountWorkoutExercisePicker(container, { workout, returnPath: '#/workout' })
         : mountEditor(container, { workout, mode: 'active', basePath: '#/workout' });
     })
     .catch((err) => {

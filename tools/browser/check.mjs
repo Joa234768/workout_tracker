@@ -23,7 +23,7 @@ import { fileURLToPath } from 'node:url';
 import { launch } from './cdp.mjs';
 import { createStaticServer } from './server.mjs';
 import { mergeExercises, filterExercises } from '../../js/logic/exercises.js';
-import { addDays, formatDate, formatShortDate, todayStr, weekdayName } from '../../js/logic/dates.js';
+import { addDays, addMonths, formatDate, formatShortDate, monthGrid, monthLabel, todayStr, weekdayName } from '../../js/logic/dates.js';
 import { weekProgress, resolveTargets } from '../../js/logic/volume.js';
 import { formatKg } from '../../js/logic/sets.js';
 
@@ -60,7 +60,9 @@ function equal(actual, expected, what) {
 async function check(name, fn, { allowErrors = false } = {}) {
   page.errors.length = 0;
   try {
+    // Every screenshot and every finished check also looks for stray text.
     await fn();
+    await noStrayText();
     if (!allowErrors && page.errors.length) throw new Error(`console errors: ${page.errors.join(' | ')}`);
     console.log(`✓ ${name}`);
   } catch (err) {
@@ -73,7 +75,30 @@ async function check(name, fn, { allowErrors = false } = {}) {
 const js = JSON.stringify;
 const text = (selector) => page.eval(`document.querySelector(${js(selector)})?.textContent ?? null`);
 const click = (selector) => page.eval(`document.querySelector(${js(selector)}).click()`);
-const shot = (name) => page.screenshot(join(out, `${name}.png`));
+/**
+ * Fails when the page shows a bare "null", "undefined", "NaN" or "[object Object]".
+ * That is what a missing value looks like when it is put on the page by
+ * mistake (e.g. passing null to replaceChildren). It once shipped unnoticed
+ * by the other checks and was only seen in a screenshot.
+ */
+async function noStrayText() {
+  const stray = await page.eval(`(() => {
+    const found = [];
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      if (node.parentElement.closest('script, style, input, textarea')) continue;
+      const text = node.nodeValue.trim();
+      if (/^(null|undefined|NaN)$/.test(text) || /\\bundefined\\b|\\bNaN\\b|\\[object Object\\]/.test(text)) found.push(text.slice(0, 60));
+    }
+    return found;
+  })()`);
+  expect(!stray.length, `stray text on the page (${await page.eval('location.hash')}): ${stray.join(' | ')}`);
+}
+
+async function shot(name) {
+  await noStrayText();
+  await page.screenshot(join(out, `${name}.png`));
+}
 const noSidewaysScroll = async () =>
   expect(!(await page.eval(`document.documentElement.scrollWidth > innerWidth`)), 'the page scrolls sideways at 375 px');
 
@@ -600,14 +625,26 @@ async function run() {
     await page.waitFor(`[...document.querySelectorAll('[data-entry] .card-title')].some((n) => n.textContent === ${js(name)})`, { what: `${name} in the workout` });
   };
   const activeWorkout = () => dbCall(`return (await db.getAllFromIndex('workouts', 'status', 'active'))[0] ?? null;`);
+  // Starting from Today offers the routines when there are any: pick one, or 'Empty workout'.
+  const startFromToday = async (buttonLabel, choice) => {
+    await page.waitFor(`[...document.querySelectorAll('main .btn')].some((b) => b.textContent === ${js(buttonLabel)})`, { what: `the "${buttonLabel}" button` });
+    await pressButton(buttonLabel);
+    await page.waitFor(DIALOG, { what: 'the choice of routines' });
+    await pressInDialog(choice);
+    await page.waitFor(`location.hash === '#/workout' && document.querySelector('main > p.muted')`, { what: 'the workout screen' });
+  };
 
   await check('Today: a workout in progress is offered again, with a pill on other screens', async () => {
     await dbCall(`
       const completed = (await db.getAllFromIndex('workouts', 'status', 'completed'))[0];
-      await db.saveWorkout({ ...completed, date: ${js(lastWeek)}, startedAt: ${js(`${lastWeek}T16:02:11.000Z`)} });`);
+      await db.saveWorkout({ ...completed, date: ${js(lastWeek)}, startedAt: ${js(`${lastWeek}T16:02:11.000Z`)} });
+      // The fixture's plan has fixed dates too. Remove it; the plan checks below make their own.
+      for (const store of ['planRules', 'planExceptions', 'plannedOneOffs']) {
+        for (const record of await db.getAll(store)) await db.remove(store, record.id);
+      }`);
     await openApp('#/today');
     await page.waitFor(`document.querySelector('.card-title')?.textContent === 'Workout in progress'`, { what: 'the in-progress card' });
-    expect(/^Started (today|18-11-2026) · 1 exercise · 1 set done$/.test(await text('.card .muted')), `card says: ${await text('.card .muted')}`);
+    expect(/^(Started today|For 18-11-2026) · 1 exercise · 1 set done$/.test(await text('.card .muted')), `card says: ${await text('.card .muted')}`);
     expect(await page.eval(`document.querySelector('.pill').hidden`), 'the pill repeats the card on Today');
     await shot('today-in-progress');
     await goTo('#/settings', `${REMINDER} === '21'`, 'Settings');
@@ -623,14 +660,14 @@ async function run() {
     await pressButton('Discard workout');
     await page.waitFor(DIALOG, { what: 'the discard confirmation' });
     await pressInDialog('Discard workout');
-    await page.waitFor(`location.hash === '#/today' && [...document.querySelectorAll('main .btn')].some((b) => b.textContent === 'Start workout')`, { what: 'Today after discarding' });
+    await page.waitFor(`location.hash === '#/today' && document.querySelector('.card-title')?.textContent === 'Rest day'`, { what: 'Today after discarding' });
     equal(await activeWorkout(), null, 'workout in progress after discarding');
     expect(await page.eval(`document.querySelector('.pill').hidden`), 'the pill is still there');
   });
 
   await check('Logging: last time shown, ✓ accepts it, comma decimals, warm-up, copy and delete', async () => {
-    await pressButton('Start workout');
-    await page.waitFor(`location.hash === '#/workout' && document.querySelector('.hint')`, { what: 'the empty workout' });
+    await startFromToday('Start a workout anyway', 'Empty workout');
+    await page.waitFor(`document.querySelector('.hint')`, { what: 'the empty workout' });
     await pickExercise('medium grip', 'Barbell Bench Press - Medium Grip');
     equal(await page.eval(`location.hash`), '#/workout', 'address after picking');
 
@@ -760,7 +797,7 @@ async function run() {
 
   await check('History: list, edit a past workout (sets and date), delete it', async () => {
     const yesterday = addDays(today, -1);
-    await goTo('#/calendar', `document.querySelectorAll('.list-row').length === 2`, 'two workouts in the history');
+    await goTo('#/calendar/history', `document.querySelectorAll('.list-row').length === 2`, 'two workouts in the history');
     equal(await page.eval(`[...document.querySelectorAll('.list-row')].map((r) => [...r.querySelectorAll('span')].map((s) => s.textContent).slice(0, 2))`), [
       [`${weekdayName(today)} ${formatDate(today)}`, '2 exercises · 3 sets · 835 kg'],
       [`${weekdayName(lastWeek)} ${formatDate(lastWeek)}`, 'Push day · 2 exercises · 3 sets · 765 kg'],
@@ -786,9 +823,336 @@ async function run() {
     await pressButton('Delete workout');
     await page.waitFor(DIALOG, { what: 'the delete confirmation' });
     await pressInDialog('Delete workout');
-    await page.waitFor(`location.hash === '#/calendar' && document.querySelectorAll('.list-row').length === 1`, { what: 'the history after deleting' });
+    await page.waitFor(`location.hash === '#/calendar' && document.querySelector('.month-grid .day')`, { what: 'the calendar after deleting' });
+    await goTo('#/calendar/history', `document.querySelectorAll('.list-row').length === 1`, 'one workout left in the history');
+    equal(await page.eval(`[...document.querySelectorAll('.segment')].map((a) => [a.textContent, a.getAttribute('aria-current')])`), [['Month', null], ['List', 'page']], 'the Month / List switch');
     equal(await dbCall(`return db.get('workouts', ${js(finishedId)});`), null, 'the deleted workout');
     await goTo(`#/calendar/${finishedId}`, `document.querySelector('.card-title')?.textContent === 'Workout not found'`, 'the not-found screen');
+  });
+
+  // ----- Phase 3: routines and calendar planning -----
+  // At this point: one finished workout a week ago ("Push day"), the routine
+  // "Push day" (bench press, 3 sets), no plan, and no workout in progress.
+  const yesterday = addDays(today, -1);
+  const [in2, in3, in4] = [2, 3, 4].map((n) => addDays(today, n));
+  const routineCards = () =>
+    page.eval(`[...document.querySelectorAll('[data-routine-exercise]')].map((c) => [c.querySelector('.card-title').textContent, ...[...c.querySelectorAll('input')].map((i) => i.value)])`);
+  const routineField = (c, n, value) =>
+    page.eval(`(() => { const i = document.querySelectorAll('[data-routine-exercise]')[${c}].querySelectorAll('input')[${n}]; i.focus(); i.value = ${js(value)}; i.dispatchEvent(new Event('input', { bubbles: true })); i.blur(); })()`);
+  const addToRoutine = async (query, name) => {
+    await page.eval(`[...document.querySelectorAll('main a.btn')].find((a) => a.textContent === '+ Add exercise').click()`);
+    await page.waitFor(`document.querySelector('input[type=search]')`, { what: 'the exercise picker' });
+    await typeInto('input[type=search]', query);
+    await page.waitFor(`document.querySelector('button.list-link .list-title')?.textContent === ${js(name)}`, { what: `${name} in the picker` });
+    await typeInto('input[type=search]', '');
+    await typeInto('input[type=search]', query);
+    await click('button.list-link');
+    await page.waitFor(`[...document.querySelectorAll('[data-routine-exercise] .card-title')].some((n) => n.textContent === ${js(name)})`, { what: `${name} in the routine` });
+  };
+  const routineNames = () => page.eval(`[...document.querySelectorAll('.list-row .list-title')].map((n) => n.textContent)`);
+  const marks = (date) => page.eval(`document.querySelector('.day[data-date="${date}"] .day-marks').textContent`);
+  const panelCards = () => page.eval(`[...document.querySelectorAll('main .card')].map((c) => [c.querySelector('.card-title')?.textContent, c.querySelector('.muted')?.textContent ?? null])`);
+  const selectDay = async (date) => {
+    await click(`.day[data-date="${date}"]`);
+    await page.waitFor(`document.querySelector('.panel-title')?.textContent.startsWith(${js(`${weekdayName(date)} ${formatDate(date)}`)})`, { what: `the panel for ${date}` });
+  };
+  const waitMarks = (date, expected) =>
+    page.waitFor(`document.querySelector('.day[data-date="${date}"] .day-marks')?.textContent === ${js(expected)}`, { what: `"${expected}" on ${date}` });
+  const stored = (store) => dbCall(`return db.getAll(${js(store)});`);
+  let pullId = null;
+  const pushId = fixture.stores.routines[0].id;
+
+  await check('Routines: create, name, add exercises, sets and rep range, reorder, duplicate, delete', async () => {
+    await goTo('#/calendar/plan', `document.querySelector('.card-title')?.textContent === 'Weekly plan' && document.querySelector('.list-row')`, 'Plan & routines');
+    equal(await routineNames(), ['Push day'], 'routines at the start (the archived one is hidden)');
+    expect(await page.eval(`document.querySelector('.card').textContent.includes('No plan yet')`), 'a plan shows although none exists');
+    await pressButton('New routine');
+    await page.waitFor(`location.hash.startsWith('#/calendar/routines/') && document.getElementById('routine-name')?.value === 'New routine'`, { what: 'the new routine' });
+    pullId = await page.eval(`decodeURIComponent(location.hash.split('/')[3])`);
+    await page.eval(`(() => { const n = document.getElementById('routine-name'); n.value = '  Pull   day '; n.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+
+    await addToRoutine('pullups', 'Pullups');
+    equal(await page.eval(`location.hash`), `#/calendar/routines/${pullId}`, 'address after picking');
+    await addToRoutine('seated cable rows', 'Seated Cable Rows');
+    equal(await routineCards(), [['Pullups', '3', '8', '12'], ['Seated Cable Rows', '3', '8', '12']], 'new exercises default to 3 sets of 8–12');
+
+    await routineField(0, 0, '4'); // sets
+    await routineField(0, 1, '15'); // minimum above the maximum: the two swap
+    equal((await routineCards())[0], ['Pullups', '4', '12', '15'], 'sets and rep range after editing');
+    await routineField(1, 0, ''); // empty falls back to the default
+    await routineField(1, 2, '500'); // above the limit: marked, not stored
+    equal((await routineCards())[1], ['Seated Cable Rows', '3', '8', '12'], 'invalid values fall back');
+    equal(await page.eval(`[...document.querySelectorAll('.routine-fields input')].map((i) => [i.getAttribute('inputmode'), getComputedStyle(i).fontSize]).every(([m, f]) => m === 'numeric' && f === '16px')`), true, 'numeric keyboards at 16px');
+
+    await chooseAction(`document.querySelector('[data-routine-exercise] .icon-button')`, 'Move down');
+    equal((await routineCards()).map((c) => c[0]), ['Seated Cable Rows', 'Pullups'], 'order after "Move down"');
+    await noSidewaysScroll();
+    await shot('routine-light');
+    await page.dark(true);
+    await shot('routine-dark');
+    await page.dark(false);
+
+    await page.sleep(300);
+    await openApp(`#/calendar/routines/${pullId}`); // nothing is lost when the app is closed
+    await page.waitFor(`document.querySelector('[data-routine-exercise] .card-title')?.textContent === 'Seated Cable Rows'`, { what: 'the routine after a reload' });
+    equal(await page.eval(`document.getElementById('routine-name').value`), 'Pull day', 'name after a reload (tidied)');
+    equal(await routineCards(), [['Seated Cable Rows', '3', '8', '12'], ['Pullups', '4', '12', '15']], 'exercises after a reload');
+
+    await pressButton('Duplicate routine');
+    await page.waitFor(`document.getElementById('routine-name')?.value === 'Pull day copy'`, { what: 'the copy' });
+    const copyId = await page.eval(`decodeURIComponent(location.hash.split('/')[3])`);
+    expect(copyId !== pullId, 'the copy has the same id');
+    await page.waitFor(`document.querySelectorAll('[data-routine-exercise]').length === 2`, { what: 'the copy\'s exercises' });
+    await click('#back-button'); // one level up is not a screen of its own: lands on Plan & routines
+    await page.waitFor(`location.hash === '#/calendar/plan' && document.querySelectorAll('.list-row').length === 3`, { what: 'three routines' });
+    equal(await routineNames(), ['Pull day', 'Pull day copy', 'Push day'], 'routines by name');
+    equal(await page.eval(`[...document.querySelectorAll('.list-row .muted')].map((n) => n.textContent)`), ['2 exercises · 7 sets', '2 exercises · 7 sets', '1 exercise · 3 sets'], 'routine summaries');
+    await shot('plan-empty');
+
+    await goTo(`#/calendar/routines/${copyId}`, `document.getElementById('routine-name')?.value === 'Pull day copy'`, 'the copy');
+    await pressButton('Delete routine');
+    await page.waitFor(DIALOG, { what: 'the delete confirmation' });
+    await pressInDialog('Delete');
+    await page.waitFor(`location.hash === '#/calendar/plan' && document.querySelectorAll('.list-row').length === 2`, { what: 'two routines after deleting' });
+    equal(await dbCall(`return db.get('routines', ${js(copyId)});`), null, 'an unused routine is deleted');
+  });
+
+  await check('Weekly plan: fixed weekdays, on the calendar years ahead, and on Today', async () => {
+    const todayName = weekdayName(today);
+    const in2Name = weekdayName(in2);
+    await goTo('#/calendar/plan/edit', `document.querySelector('select[aria-label="Monday"]')`, 'the plan editor');
+    await page.eval(`(() => {
+      const set = (label, value) => { const s = document.querySelector('select[aria-label="' + label + '"]'); s.value = value; s.dispatchEvent(new Event('change', { bubbles: true })); };
+      set(${js(todayName)}, ${js(pullId)});
+      set(${js(in2Name)}, ${js(pushId)});
+    })()`);
+    equal(await page.eval(`[document.getElementById('plan-start').value, document.getElementById('plan-start').min]`), [today, today], 'the plan starts today by default, never earlier');
+    await shot('plan-edit');
+    await pressButton('Save plan');
+    await page.waitFor(`location.hash === '#/calendar/plan' && document.querySelector('.plain-list')`, { what: 'the saved plan' });
+    const order = [todayName, in2Name].sort((a, b) => ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].indexOf(a) - ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].indexOf(b));
+    equal(await page.eval(`[...document.querySelectorAll('.plain-list li')].map((n) => n.textContent)`),
+      order.map((name) => `${name} · ${name === todayName ? 'Pull day' : 'Push day'}`), 'plan summary');
+    expect(await page.eval(`document.querySelector('.card').textContent.includes(${js(`Since ${formatDate(today)}.`)})`), 'no "Since" date');
+    const rules = await stored('planRules');
+    const wd = (date) => ((new Date(`${date}T12:00:00`).getDay() + 6) % 7) + 1;
+    equal(rules.map((r) => [r.type, r.startDate, r.endDate, r.days]), [['weekly', today, null, { [wd(today)]: pullId, [wd(in2)]: pushId }]], 'stored plan');
+    await shot('plan-light');
+
+    // The calendar: today and the day after tomorrow are planned.
+    await goTo('#/calendar', `document.querySelectorAll('.month-grid .day').length === 42 && document.querySelector('.panel-title')`, 'the month view');
+    await waitMarks(today, '○');
+    equal(await marks(in2), '○', `mark on ${in2}`);
+    equal(await marks(addDays(today, 1)), '', 'mark on a rest day');
+    equal(await text('.month-title'), monthLabel(today), 'month title');
+    equal(await page.eval(`document.querySelector('.day.today').dataset.date`), today, 'the day marked as today');
+    expect((await text('.panel-title')).endsWith('· today'), 'today is not selected at first');
+    equal((await panelCards())[0], ['Planned: Pull day', '2 exercises · 7 sets'], 'panel for today');
+    await noSidewaysScroll();
+    await shot('calendar-light');
+    await page.dark(true);
+    await shot('calendar-dark');
+    await page.dark(false);
+
+    // Five years ahead, instantly, with the plan still on its weekdays.
+    for (let i = 0; i < 5; i++) await click('[aria-label="Next year"]');
+    const far = addMonths(today, 60);
+    equal(await text('.month-title'), monthLabel(far), 'month title five years ahead');
+    const expectedPlanned = monthGrid(far).filter((d) => d.inMonth && [wd(today), wd(in2)].includes(wd(d.date))).length;
+    equal(await page.eval(`document.querySelectorAll('.day:not(.outside) .mark.planned').length`), expectedPlanned, 'planned days five years ahead');
+    equal(await page.eval(`document.querySelectorAll('.mark.missed').length`), 0, 'missed days in the future');
+    for (let i = 0; i < 7; i++) await click('[aria-label="Previous year"]');
+    equal(await text('.month-title'), monthLabel(addMonths(today, -24)), 'month title two years back');
+    equal(await page.eval(`document.querySelectorAll('.day:not(.outside) .mark').length`), 0, 'nothing is planned or missed before the plan started');
+    await pressButton('Today');
+    equal(await text('.month-title'), monthLabel(today), 'month title after "Today"');
+
+    // Today shows the planned workout with a big Start button.
+    await goTo('#/today', `document.querySelector('.card-title')?.textContent === 'Pull day'`, 'the planned workout on Today');
+    equal(await page.eval(`[...document.querySelectorAll('.card .plain-list li')].map((n) => n.textContent)`),
+      ['Seated Cable Rows · 3 × 8–12', 'Pullups · 4 × 12–15'], 'exercises of the planned routine');
+    expect(await page.eval(`[...document.querySelectorAll('main .btn.big')].some((b) => b.textContent === 'Start workout')`), 'no big Start button');
+    equal(await page.eval(`[...document.querySelectorAll('main .hint')].map((n) => n.textContent)`), [`Next: ${in2Name} ${formatDate(in2)} · Push day`], 'the "Next" line');
+    await shot('today-planned');
+    await page.dark(true);
+    await shot('today-planned-dark');
+    await page.dark(false);
+  });
+
+  await check('A planned day: cancel and restore, change routine, move, one-off workouts', async () => {
+    await goTo('#/calendar', `document.querySelectorAll('.month-grid .day').length === 42 && document.querySelector('.panel-title')`, 'the month view');
+    await selectDay(in2);
+    equal((await panelCards())[0], ['Planned: Push day', '1 exercise · 3 sets'], `panel for ${in2}`);
+
+    await pressButton('Cancel this workout');
+    await waitMarks(in2, '–');
+    equal((await panelCards())[0][0], 'Cancelled: Push day', 'card after cancelling');
+    equal((await stored('planExceptions')).map((e) => [e.originalDate, e.cancelled, e.movedTo, e.routineId]), [[in2, true, null, null]], 'stored exception');
+    await pressButton('Restore');
+    await waitMarks(in2, '○');
+    equal(await stored('planExceptions'), [], 'no exception is kept once nothing deviates');
+
+    await pressButton('Change routine');
+    await page.waitFor(DIALOG, { what: 'the routine choice' });
+    await pressInDialog('Pull day');
+    await page.waitFor(`document.querySelector('main .card .card-title')?.textContent === 'Planned: Pull day'`, { what: 'the changed routine' });
+
+    await pressButton('Move to another date');
+    await page.waitFor(`${DIALOG}?.querySelector('input[type=date]')`, { what: 'the date picker' });
+    equal(await page.eval(`${DIALOG}.querySelector('input[type=date]').value`), in2, 'the date picker starts on the current date');
+    await page.eval(`${DIALOG}.querySelector('input[type=date]').value = ${js(in3)}`);
+    await pressInDialog('Move');
+    await waitMarks(in3, '○');
+    equal(await marks(in2), '', 'the day it was moved away from');
+    await selectDay(in3);
+    equal((await panelCards())[0], ['Planned: Pull day', `2 exercises · 7 sets · moved from ${formatDate(in2)}`], 'the moved workout');
+    equal((await stored('planExceptions')).map((e) => [e.originalDate, e.cancelled, e.movedTo, e.routineId]), [[in2, false, in3, pullId]], 'one exception holds both changes');
+    await shot('calendar-day');
+
+    // One-off workouts: on a free day, without a routine; then deleted.
+    await selectDay(in4);
+    expect((await page.eval(`document.querySelector('main').textContent`)).includes('Nothing planned or logged.'), 'the free day is not empty');
+    await pressButton('Plan a workout on this day');
+    await page.waitFor(DIALOG, { what: 'the routine choice' });
+    await pressInDialog('No routine (empty workout)');
+    await waitMarks(in4, '○');
+    equal((await panelCards())[0], ['Planned: Workout', 'one-off'], 'the one-off');
+    await pressButton('Delete');
+    await page.waitFor(DIALOG, { what: 'the delete confirmation' });
+    await pressInDialog('Delete');
+    await waitMarks(in4, '');
+    equal(await stored('plannedOneOffs'), [], 'one-offs after deleting');
+
+    // A planned workout in the past that was not done is "missed".
+    await selectDay(yesterday);
+    await pressButton('Plan a workout on this day');
+    await page.waitFor(DIALOG, { what: 'the routine choice' });
+    await pressInDialog('Push day');
+    await waitMarks(yesterday, '×');
+    equal((await panelCards())[0], ['Missed: Push day', '1 exercise · 3 sets · one-off'], 'the missed workout');
+    expect((await page.eval(`document.querySelector('.day[data-date="${yesterday}"]').getAttribute('aria-label')`)).endsWith('missed: Push day'), 'the day is not announced as missed');
+  });
+
+  let plannedWorkoutId = null;
+  await check('Starting a planned workout: rows from the routine, linked to the plan, shown as done', async () => {
+    await pressButton('Start'); // yesterday's missed "Push day"
+    await page.waitFor(`location.hash === '#/workout' && document.querySelector('[data-entry] .set-row')`, { what: 'the workout' });
+    await page.waitFor(`document.querySelector('[data-entry] .card-title')?.textContent === 'Barbell Bench Press - Medium Grip'`, { what: 'the routine\'s exercise' });
+    expect((await text('main > p.muted')).startsWith(`Push day · ${weekdayName(today)} ${formatDate(today)}`), `heading says: ${await text('main > p.muted')}`);
+    equal(await rowsOf(0), [['1', '', '', false], ['2', '', '', false], ['3', '', '', false]], 'rows come from the routine (3 sets)');
+    const oneOff = (await stored('plannedOneOffs'))[0];
+    const active = await activeWorkout();
+    equal([active.date, active.routineId, active.routineName, active.plannedRef, active.exercises[0].repMin, active.exercises[0].repMax],
+      [today, pushId, 'Push day', `oneoff:${oneOff.id}`, 8, 12], 'stored workout');
+
+    // While it is in progress, another one cannot be started.
+    await goTo('#/calendar', `document.querySelector('.panel-title')`, 'the month view');
+    await selectDay(today);
+    await page.waitFor(`[...document.querySelectorAll('main .card .card-title')].some((n) => n.textContent === 'In progress: Push day')`, { what: 'the in-progress card' });
+    expect(await page.eval(`[...document.querySelectorAll('main .btn')].find((b) => b.textContent === 'Start').disabled`), 'Start is enabled while a workout is in progress');
+    await click('.pill');
+    await page.waitFor(`location.hash === '#/workout' && document.querySelector('[data-entry] .set-row')`, { what: 'the workout again' });
+    await page.waitFor(`${field(0, 0, 0)}.placeholder === '42.5'`, { what: 'last time as placeholder' });
+
+    await tapTick(0, 0); // accepts last time: 42.5 × 10
+    await page.waitFor(`${row(0, 0)}.classList.contains('done')`, { what: 'the tick' });
+    await pressButton('Finish workout');
+    await page.waitFor(DIALOG, { what: 'the finish confirmation' });
+    await pressInDialog('Finish');
+    await page.waitFor(`location.hash.startsWith('#/calendar/') && document.querySelector('.stats')`, { what: 'the summary' });
+    plannedWorkoutId = await page.eval(`decodeURIComponent(location.hash.split('/')[2])`);
+    expect(await page.eval(`document.querySelector('.card').textContent.includes('Push day')`), 'the summary does not name the routine');
+
+    // Yesterday is no longer missed; today counts as done (so today's own plan is not shown as open).
+    await click('#back-button');
+    await page.waitFor(`location.hash === '#/calendar' && document.querySelector('.panel-title')`, { what: 'the month view' });
+    await waitMarks(today, '●');
+    equal(await marks(yesterday), '', 'yesterday after doing its workout today');
+    await selectDay(today);
+    equal((await panelCards())[0], ['Done: Push day', '1 exercise · 1 set'], 'panel for today');
+    await goTo('#/today', `document.querySelector('.card-title')?.textContent === 'Done today: Push day'`, 'Today after the workout');
+    expect(await page.eval(`[...document.querySelectorAll('main .btn')].some((b) => b.textContent === 'Start another workout')`), 'no way to start another workout');
+    equal(await page.eval(`[...document.querySelectorAll('main .hint')].map((n) => n.textContent)`), [`Next: ${weekdayName(in3)} ${formatDate(in3)} · Pull day`], 'the "Next" line follows the moved workout');
+  });
+
+  await check('Starting from a routine, logging a past day, and deleting routines that are in use', async () => {
+    await startFromToday('Start another workout', 'Pull day');
+    await page.waitFor(`document.querySelectorAll('[data-entry]').length === 2`, { what: 'the routine\'s exercises' });
+    await page.waitFor(`document.querySelector('[data-entry] .card-title')?.textContent === 'Seated Cable Rows'`, { what: 'exercise names' });
+    equal([(await rowsOf(0)).length, (await rowsOf(1)).length], [3, 4], 'rows per exercise');
+    let active = await activeWorkout();
+    equal([active.routineName, active.plannedRef, active.exercises.map((e) => [e.repMin, e.repMax])], ['Pull day', null, [[8, 12], [12, 15]]], 'stored workout from a routine');
+    await pressButton('Discard workout');
+    await page.waitFor(DIALOG, { what: 'the discard confirmation' });
+    await pressInDialog('Discard workout');
+    await page.waitFor(`location.hash === '#/today'`, { what: 'Today' });
+
+    // Logging a workout for a past day.
+    await goTo('#/calendar', `document.querySelector('.panel-title')`, 'the month view');
+    await selectDay(yesterday);
+    await pressButton('Log a workout for this day');
+    await page.waitFor(`location.hash === '#/workout' && document.querySelector('.hint')`, { what: 'the workout for yesterday' });
+    active = await activeWorkout();
+    equal([active.date, active.routineId], [yesterday, null], 'the workout counts for yesterday');
+    expect((await text('main > p.muted')).startsWith(`${weekdayName(yesterday)} ${formatDate(yesterday)}`), 'the heading does not show yesterday');
+    await pressButton('Discard workout');
+    await page.waitFor(DIALOG, { what: 'the discard confirmation' });
+    await pressInDialog('Discard workout');
+    await page.waitFor(`location.hash === '#/today'`, { what: 'Today' });
+
+    // A routine in the weekly plan cannot be deleted.
+    await goTo(`#/calendar/routines/${pullId}`, `document.getElementById('routine-name')?.value === 'Pull day'`, 'Pull day');
+    await pressButton('Delete routine');
+    await page.waitFor(DIALOG, { what: 'the delete confirmation' });
+    await pressInDialog('Delete');
+    await page.waitFor(`${DIALOG}?.querySelector('h2')?.textContent === 'Still in your weekly plan'`, { what: 'the refusal' });
+    await pressInDialog('OK');
+    await dialogClosed();
+    equal((await dbCall(`return db.get('routines', ${js(pullId)});`)).archivedAt, null, 'the routine after the refused delete');
+
+    // Stop planning; then it can go. It is still referred to (a changed day), so it is archived, not deleted.
+    await goTo('#/calendar/plan/edit', `[...document.querySelectorAll('main .btn')].some((b) => b.textContent === 'Stop planning')`, 'the plan editor');
+    equal(await page.eval(`document.querySelector('select[aria-label=${js(weekdayName(today))}]').value`), pullId, 'the editor starts from the current plan');
+    await pressButton('Stop planning');
+    await page.waitFor(DIALOG, { what: 'the confirmation' });
+    await pressInDialog('Stop planning');
+    await page.waitFor(`location.hash === '#/calendar/plan' && document.querySelector('.card').textContent.includes('No plan yet')`, { what: 'no plan' });
+    equal(await stored('planRules'), [], 'stored plan after stopping on the day it started');
+    await goTo(`#/calendar/routines/${pullId}`, `document.getElementById('routine-name')?.value === 'Pull day'`, 'Pull day');
+    await pressButton('Delete routine');
+    await page.waitFor(DIALOG, { what: 'the delete confirmation' });
+    await pressInDialog('Delete');
+    await page.waitFor(`location.hash === '#/calendar/plan' && document.querySelectorAll('.list-row').length === 1`, { what: 'one routine left' });
+    expect(typeof (await dbCall(`return db.get('routines', ${js(pullId)});`)).archivedAt === 'string', 'a routine that is referred to was not archived');
+
+    // Past workouts keep the routine's name, and the calendar still shows them.
+    await goTo('#/calendar/history', `document.querySelectorAll('.list-row').length === 2`, 'the history');
+    expect((await page.eval(`document.querySelector('.list-row').textContent`)).includes('Push day'), 'the workout lost its routine name');
+    await goTo('#/calendar', `document.querySelector('.panel-title')`, 'the month view');
+    await waitMarks(today, '●');
+    equal(await marks(in3), '', 'planned days after stopping the plan');
+  });
+
+  await check('Weekly plan as a rotation: routines take turns on the chosen days', async () => {
+    await goTo('#/calendar/plan/edit', `document.querySelector('select[aria-label="Monday"]')`, 'the plan editor');
+    await tapChip('Rotation');
+    await page.waitFor(`document.querySelector('[aria-label="Training days"]')`, { what: 'the rotation editor' });
+    equal(await page.eval(`[...document.querySelectorAll('[aria-label="Training days"] [aria-pressed=true]')].map((c) => c.textContent)`), ['Mon', 'Wed', 'Fri'], 'default training days');
+    await pressButton('+ Add a step'); // Push day → Push day: a two-step rotation with the only routine
+    equal(await page.eval(`document.querySelectorAll('select[aria-label^="Rotation step"]').length`), 2, 'rotation steps');
+    await shot('plan-rotation');
+    await pressButton('Save plan');
+    await page.waitFor(`location.hash === '#/calendar/plan' && document.querySelector('.plain-list')`, { what: 'the saved plan' });
+    equal(await page.eval(`[...document.querySelectorAll('.plain-list li')].map((n) => n.textContent)`), ['Training days: Mon, Wed, Fri', 'Rotation: Push day → Push day'], 'plan summary');
+    const [rule] = await stored('planRules');
+    equal([rule.type, rule.startDate, rule.endDate, rule.weekdays, rule.routineIds, rule.offset], ['rotation', today, null, [1, 3, 5], [pushId, pushId], 0], 'stored rotation');
+    await goTo('#/calendar', `document.querySelector('.panel-title')`, 'the month view');
+    for (let i = 0; i < 12; i++) await click('[aria-label="Next month"]');
+    const far = addMonths(today, 12);
+    const wd = (date) => ((new Date(`${date}T12:00:00`).getDay() + 6) % 7) + 1;
+    equal(await page.eval(`document.querySelectorAll('.day:not(.outside) .mark.planned').length`),
+      monthGrid(far).filter((d) => d.inMonth && [1, 3, 5].includes(wd(d.date))).length, 'planned days a year ahead');
+    await pressButton('Today');
   });
 
   await check('Update: a new version shows the banner, and tapping it loads the new version', async () => {
@@ -827,9 +1191,13 @@ async function run() {
     await page.waitFor(`${REMINDER} === '21'`, { what: 'saved data offline' });
     await goTo('#/exercises', `document.querySelectorAll('.list-row').length === 60`, 'the exercise list offline');
     await goTo('#/exercises/Barbell_Squat', `document.querySelectorAll('.steps li').length > 0`, 'exercise instructions offline');
-    await goTo('#/calendar', `document.querySelectorAll('.list-row').length === 1`, 'the workout history offline');
-    await goTo('#/today', `[...document.querySelectorAll('main .btn')].some((b) => b.textContent === 'Start workout')`, 'Today offline');
-    await pressButton('Start workout');
+    await goTo('#/calendar/history', `document.querySelectorAll('.list-row').length >= 1`, 'the workout history offline');
+    await goTo('#/calendar', `document.querySelectorAll('.month-grid .day').length === 42`, 'the month view offline');
+    await goTo('#/calendar/plan', `document.querySelector('.card-title')?.textContent === 'Weekly plan'`, 'the plan offline');
+    await goTo('#/today', `[...document.querySelectorAll('main .btn')].some((b) => b.textContent.startsWith('Start a'))`, 'Today offline');
+    await page.eval(`[...document.querySelectorAll('main .btn')].find((b) => b.textContent.startsWith('Start a')).click()`);
+    await page.waitFor(DIALOG, { what: 'the choice of routines offline' });
+    await pressInDialog('Empty workout');
     await page.waitFor(`location.hash === '#/workout' && document.querySelector('.hint')`, { what: 'starting a workout offline' });
     await goTo('#/settings', `document.querySelector('main a.btn[href="#/settings/selfcheck"]')`, 'Settings offline');
     await click('main a.btn[href="#/settings/selfcheck"]');

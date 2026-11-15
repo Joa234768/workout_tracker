@@ -38,6 +38,44 @@ export function actionSheet({ title, actions }) {
   });
 }
 
+/**
+ * Asks for a date. Resolves to 'YYYY-MM-DD', or null if cancelled.
+ * min / max limit the choice (both optional).
+ */
+export function promptDate({ title, lines = [], value, min = null, max = null, confirmLabel = 'OK' }) {
+  return new Promise((resolve) => {
+    const dialog = el('dialog', { class: 'dialog' });
+    const input = el('input', { class: 'input', type: 'date', value, min, max, 'aria-label': title });
+    let chosen = null;
+    const confirm = el('button', {
+      class: 'btn',
+      type: 'button',
+      text: confirmLabel,
+      onclick: () => {
+        const picked = input.value;
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(picked) || (min && picked < min) || (max && picked > max)) {
+          input.classList.add('invalid');
+          return;
+        }
+        chosen = picked;
+        dialog.close();
+      },
+    });
+    const cancel = el('button', { class: 'btn plain', type: 'button', text: 'Cancel', onclick: () => dialog.close() });
+    dialog.append(
+      el('h2', { text: title }),
+      el('div', { class: 'dialog-body' }, lines.map((line) => el('p', { text: line })), input),
+      el('div', { class: 'dialog-actions' }, confirm, cancel)
+    );
+    dialog.addEventListener('close', () => {
+      dialog.remove();
+      resolve(chosen);
+    });
+    document.body.append(dialog);
+    dialog.showModal();
+  });
+}
+
 export function confirmDialog({ title, lines = [], confirmLabel = 'OK', cancelLabel = 'Cancel', danger = false, extra = null }) {
   return new Promise((resolve) => {
     const dialog = el('dialog', { class: 'dialog' });

@@ -148,6 +148,32 @@ async function run(fixtureUrl, report) {
     seeded = await main.exportStores();
   });
 
+  check('Batch writes across stores happen together or not at all', async () => {
+    const before = await main.exportStores();
+    await main.batch([
+      { store: 'planRules', put: { id: 'batch-rule', startDate: '2030-01-01', endDate: null, type: 'weekly', days: { 1: 'x' } } },
+      { store: 'routines', put: { id: 'batch-routine', name: 'Batch', exercises: [], archivedAt: null } },
+      { store: 'bodyWeights', remove: '2026-11-16' },
+    ]);
+    assert((await main.get('planRules', 'batch-rule')) !== null, 'the rule was not written');
+    assert((await main.get('routines', 'batch-routine')) !== null, 'the routine was not written');
+    assert((await main.get('bodyWeights', '2026-11-16')) === null, 'the record was not removed');
+
+    await main.replaceAll(before);
+    let failed = false;
+    try {
+      await main.batch([
+        { store: 'routines', put: { id: 'half-done', name: 'Should not stay', exercises: [], archivedAt: null } },
+        // Breaks the unique index on originalDate: the whole batch must roll back.
+        { store: 'planExceptions', put: { id: 'clash', originalDate: '2026-11-18', cancelled: true, movedTo: null, routineId: null } },
+      ]);
+    } catch {
+      failed = true;
+    }
+    assert(failed, 'the clashing batch was accepted');
+    same(await main.exportStores(), before, 'data changed although the batch failed');
+  });
+
   // --- Upgrades, with a made-up schema ---
   const v1 = { ...MIG, version: 1, stores: [{ name: 'items', keyPath: 'id', indexes: [] }], migrations: [] };
   const step12 = {

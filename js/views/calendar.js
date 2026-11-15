@@ -1,9 +1,14 @@
-// The Calendar tab. For now it is the workout history; the month view and
-// planning arrive in Phase 3. Routes:
-//   #/calendar                    history list
-//   #/calendar/<id>               a workout's summary
-//   #/calendar/<id>/edit          edit that workout
-//   #/calendar/<id>/edit/add      pick an exercise to add to it
+// The Calendar tab. Routes:
+//   #/calendar                        month view
+//   #/calendar/history                list of finished workouts
+//   #/calendar/plan                   weekly plan and routines
+//   #/calendar/plan/edit              change the weekly plan
+//   #/calendar/routines/<id>          edit a routine
+//   #/calendar/routines/<id>/add      pick an exercise for a routine
+//   #/calendar/<workoutId>            a workout's summary
+//   #/calendar/<workoutId>/edit       edit that workout
+//   #/calendar/<workoutId>/edit/add   pick an exercise to add to it
+// Workout ids are UUIDs, so they never collide with the words above.
 
 import { el, section } from '../ui/dom.js';
 import { getLibrary } from '../exercises.js';
@@ -12,26 +17,30 @@ import { workoutStats } from '../logic/workout.js';
 import { formatDate, weekdayName } from '../logic/dates.js';
 import { formatWhole } from '../logic/sets.js';
 import { mountEditor } from './workout-editor.js';
-import { mountExercisePicker } from './exercise-picker.js';
+import { mountWorkoutExercisePicker } from './exercise-picker.js';
 import * as summary from './workout-summary.js';
+import * as month from './calendar-month.js';
+import * as plan from './plan.js';
+import * as routineEditor from './routine-editor.js';
 
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 
 function mountHistory(container) {
   let alive = true;
-  container.append(el('p', { class: 'muted', text: 'Loading…' }));
+  const body = el('div', { class: 'stack-lg' }, el('p', { class: 'muted', text: 'Loading…' }));
+  container.append(month.viewSwitch('list'), body);
 
   Promise.all([listCompletedWorkouts(), getLibrary()])
     .then(([workouts, library]) => {
       if (!alive) return;
       if (!workouts.length) {
-        container.replaceChildren(
+        body.replaceChildren(
           section('History', el('p', { class: 'muted', text: 'Finished workouts appear here. Start one from the Today screen.' }))
         );
         return;
       }
       const nameOf = new Map(library.map((exercise) => [exercise.id, exercise.name]));
-      container.replaceChildren(
+      body.replaceChildren(
         el('p', { class: 'muted', text: plural(workouts.length, 'workout', 'workouts') }),
         el('ul', { class: 'list' },
           workouts.map((workout) => {
@@ -56,7 +65,7 @@ function mountHistory(container) {
     })
     .catch((err) => {
       console.error(err);
-      if (alive) container.replaceChildren(el('p', { class: 'muted', text: 'The history could not be loaded.' }));
+      if (alive) body.replaceChildren(el('p', { class: 'muted', text: 'The history could not be loaded.' }));
     });
 
   return () => {
@@ -64,7 +73,7 @@ function mountHistory(container) {
   };
 }
 
-function mountEdit(container, id, adding) {
+function mountWorkoutEdit(container, id, adding) {
   let alive = true;
   let cleanup = null;
   const editPath = `#/calendar/${encodeURIComponent(id)}/edit`;
@@ -80,7 +89,7 @@ function mountEdit(container, id, adding) {
         location.replace(adding ? '#/workout/add' : '#/workout'); // the workout in progress has its own screen
       } else {
         cleanup = adding
-          ? mountExercisePicker(container, { workout, returnPath: editPath })
+          ? mountWorkoutExercisePicker(container, { workout, returnPath: editPath })
           : mountEditor(container, { workout, mode: 'edit', basePath: editPath });
       }
     })
@@ -95,9 +104,22 @@ function mountEdit(container, id, adding) {
   };
 }
 
+// The back arrow goes up one level, which can land on an address that is
+// only a prefix (e.g. #/calendar/routines). Send those to the right screen.
+function redirect(container, hash) {
+  location.replace(hash);
+  return () => {};
+}
+
 export function mount(container, params = {}) {
-  const [id, action, sub] = params.segments || [];
-  if (!id) return mountHistory(container);
-  if (action === 'edit') return mountEdit(container, id, sub === 'add');
-  return summary.mount(container, { id });
+  const [first, second, third] = params.segments || [];
+  if (!first) return month.mount(container);
+  if (first === 'history') return mountHistory(container);
+  if (first === 'plan') return plan.mount(container, { edit: second === 'edit' });
+  if (first === 'routines') {
+    if (!second) return redirect(container, '#/calendar/plan');
+    return routineEditor.mount(container, { id: second, adding: third === 'add' });
+  }
+  if (second === 'edit') return mountWorkoutEdit(container, first, third === 'add');
+  return summary.mount(container, { id: first });
 }

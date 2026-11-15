@@ -287,6 +287,33 @@ export function createDb({
       return withStore(storeName, 'readonly', (s) => s.index(indexName).getAll(range));
     },
 
+    /**
+     * Several writes, possibly to different stores, in one transaction: either
+     * all of them happen or none. ops: [{ store, put: record } | { store, remove: key }].
+     */
+    async batch(ops) {
+      if (!ops.length) return;
+      const db = await ready();
+      const tx = db.transaction([...new Set(ops.map((op) => op.store))], 'readwrite');
+      const done = transactionDone(tx);
+      try {
+        for (const op of ops) {
+          const store = tx.objectStore(op.store);
+          if ('put' in op) store.put(op.put);
+          else store.delete(op.remove);
+        }
+      } catch (err) {
+        try {
+          tx.abort();
+        } catch {
+          /* already aborting */
+        }
+        await done.catch(() => {});
+        throw err;
+      }
+      await done;
+    },
+
     /** A setting's stored value, or its default. */
     async getSetting(key) {
       const record = await api.get('settings', key);

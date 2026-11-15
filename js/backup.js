@@ -79,6 +79,7 @@ export async function importBackup(checked) {
   await db.replaceAll(checked.data);
   notifyBackupChanged();
   notifyWorkoutChanged(); // the workout in progress may have appeared or gone
+  window.dispatchEvent(new Event('plan-changed'));
 }
 
 function download(file) {

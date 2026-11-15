@@ -372,7 +372,7 @@ export function mountEditor(container, { workout, mode, basePath }) {
   const heading = el('p', {
     class: 'muted',
     text: mode === 'active'
-      ? `${weekdayName(workout.date)} ${formatDate(workout.date)} · saved as you go`
+      ? `${workout.routineName ? `${workout.routineName} · ` : ''}${weekdayName(workout.date)} ${formatDate(workout.date)} · saved as you go`
       : 'Changes are saved as you make them.',
   });
   const actions = el('div', { class: 'stack' },

@@ -111,7 +111,11 @@ For a rotation, the routine on a date is found by counting training-day slots si
 
 The `movedTo` index finds workouts moved into the visible month from outside it.
 
-**`plannedOneOffs`** — one-off planned workouts. Moving one just edits its `date`.
+- An exception that no longer deviates (not cancelled, not moved, no other routine) is deleted.
+- An exception whose `originalDate` has no workout under the current rules (the plan changed since) is ignored.
+- `routineId` on an exception replaces the routine for that one day only.
+
+**`plannedOneOffs`** — one-off planned workouts. Moving one just edits its `date`. The app deletes a one-off instead of cancelling it; `cancelled` is still understood (a backup may contain it).
 
 ```js
 { id, date: '2026-11-21', routineId: '…' | null, cancelled: false }
@@ -147,6 +151,20 @@ Built-in exercises are read from `data/exercises.json` and never copied into Ind
 ### bodyWeights
 
 `{ date: '2026-11-16', kg: 78.4, updatedAt }`. One entry per day; a second entry that day replaces the first.
+
+### Changing the plan
+
+- A new plan starts on a date (today or later). The rule version covering that date is ended the day before, later versions are removed, and the new one starts there, open-ended. Earlier days keep the plan they had. All of it is written in one transaction (`db.batch`).
+- "Stop planning" is the same without a new rule.
+- A rotation always starts at its first routine on the first training day on or after `startDate` (`offset: 0`).
+- A routine in a rule version that is running today or starts later cannot be deleted; the plan must be changed first. Otherwise a routine that anything refers to is archived, and one nothing refers to is deleted.
+
+### Planned workouts and logged workouts
+
+- Starting a planned workout stores the occurrence's `ref` in the workout's `plannedRef` (`rule:<originalDate>` or `oneoff:<id>`), the routine's id and name, and one entry per routine exercise with the routine's number of rows and rep range.
+- The workout's `date` is the day it is started, also when it fulfils a missed day. A workout logged "for" a past day from the calendar gets that day as its `date`.
+- An occurrence counts as done when a completed workout carries its `ref`, or any completed workout exists on its date. A done occurrence is not shown separately; the workout is shown on its own date.
+- The workout in progress does not complete an occurrence until it is finished.
 
 ## Migrations
 

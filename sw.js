@@ -3,7 +3,7 @@
 // APP_VERSION is defined here and only here. Every release bumps it: the
 // browser detects an update by comparing this file byte for byte, and the
 // version names the cache. The Settings screen asks this worker for it.
-const APP_VERSION = '0.6.1';
+const APP_VERSION = '0.7.0';
 
 const CACHE_PREFIX = 'shell-v';
 const CACHE_NAME = `${CACHE_PREFIX}${APP_VERSION}`;
@@ -25,6 +25,7 @@ const PRECACHE = [
   './js/backup.js',
   './js/db.js',
   './js/exercises.js',
+  './js/plan.js',
   './js/router.js',
   './js/selfcheck.js',
   './js/sw-client.js',
@@ -33,6 +34,8 @@ const PRECACHE = [
   './js/logic/dates.js',
   './js/logic/exercises.js',
   './js/logic/muscles.js',
+  './js/logic/plan.js',
+  './js/logic/routines.js',
   './js/logic/schema.js',
   './js/logic/sets.js',
   './js/logic/volume.js',
@@ -43,13 +46,16 @@ const PRECACHE = [
   './js/ui/dom.js',
   './js/ui/export-button.js',
   './js/views/today.js',
+  './js/views/calendar-month.js',
   './js/views/calendar.js',
   './js/views/exercise-detail.js',
   './js/views/exercise-form.js',
   './js/views/exercise-list.js',
   './js/views/exercise-muscles.js',
   './js/views/exercise-picker.js',
+  './js/views/plan.js',
   './js/views/progress.js',
+  './js/views/routine-editor.js',
   './js/views/exercises.js',
   './js/views/selfcheck.js',
   './js/views/settings.js',

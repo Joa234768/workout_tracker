@@ -27,7 +27,7 @@ Tick items off (`- [x]`) as they're completed. Build in phase order. Each phase 
 - [x] Create custom exercises (name, equipment, primary/secondary muscles).
 
 ## Phase 2 — Logging workouts
-- [x] Start a workout: from a planned/routine workout, or as an empty workout. *(Empty workouts are done. Starting from a routine or a planned day arrives with Phase 3, which adds routines.)*
+- [x] Start a workout: from a planned/routine workout, or as an empty workout.
 - [x] Per exercise, a list of set rows: **set # · kg · reps · warm-up toggle · done ✓**. A "+ Add set" button. A routine pre-fills the number of sets. Each set can have its own weight and reps (e.g. 10 kg × 10, 8 kg × 12, 6 kg × 10).
 - [x] **Last time's numbers, shown unobtrusively:**
   - A muted grey line under the exercise name, e.g. `Last · 12 Nov: 10×10 · 12×8 · 10×6`.
@@ -42,13 +42,13 @@ Tick items off (`- [x]`) as they're completed. Build in phase order. Each phase 
 - [x] Workout history list. Open any past workout to **edit or delete** it.
 
 ## Phase 3 — Routines and calendar planning
-- [ ] **Routines (templates):** a name (e.g. "Push day"), an ordered list of exercises, the number of sets per exercise, and an optional target rep range per exercise (default 8–12). Create, edit, duplicate and delete them.
-- [ ] **Weekly plan:** map out training in advance, e.g. assign routines to weekdays (Mon = Push, Wed = Pull, Fri = Legs), or a rotation A/B/C over chosen training days.
-- [ ] **Calendar month view** that navigates freely, **years ahead and back**. Each day shows: planned, completed, cancelled, or missed (planned but neither done nor cancelled).
+- [x] **Routines (templates):** a name (e.g. "Push day"), an ordered list of exercises, the number of sets per exercise, and an optional target rep range per exercise (default 8–12). Create, edit, duplicate and delete them.
+- [x] **Weekly plan:** map out training in advance, e.g. assign routines to weekdays (Mon = Push, Wed = Pull, Fri = Legs), or a rotation A/B/C over chosen training days.
+- [x] **Calendar month view** that navigates freely, **years ahead and back**. Each day shows: planned, completed, cancelled, or missed (planned but neither done nor cancelled).
   - Design hint: store the plan as a rule plus exceptions (moves, cancellations, one-off additions) instead of pre-generating years of entries. The plan phase decides.
-- [ ] Tapping a planned day offers: **Start**, **Move to another date**, **Cancel**, or **Change routine** for that day.
-- [ ] Add a one-off planned workout on any date. Log an unplanned workout on any day.
-- [ ] The Today screen shows today's planned workout with a big Start button (or "Rest day", with an option to start a workout anyway).
+- [x] Tapping a planned day offers: **Start**, **Move to another date**, **Cancel**, or **Change routine** for that day.
+- [x] Add a one-off planned workout on any date. Log an unplanned workout on any day.
+- [x] The Today screen shows today's planned workout with a big Start button (or "Rest day", with an option to start a workout anyway).
 
 ## Phase 4 — Muscle volume
 - [ ] **Weekly sets per muscle group** (Monday–Sunday), as progress bars toward a target. Counts only completed working sets.

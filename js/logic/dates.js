@@ -110,3 +110,43 @@ export function formatShortDate(dateStr, today = null) {
 export function weekdayName(dateStr) {
   return WEEKDAYS[isoWeekday(dateStr) - 1];
 }
+
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+/** 'Mon' … 'Sun' for 1 … 7. */
+export function weekdayShort(isoDay) {
+  return WEEKDAYS[isoDay - 1].slice(0, 3);
+}
+
+/** The first day of the month containing dateStr. */
+export function monthStart(dateStr) {
+  if (!isValidDateStr(dateStr)) throw new Error(`Invalid date: ${dateStr}`);
+  return `${dateStr.slice(0, 8)}01`;
+}
+
+/** The first day of the month `n` months after (or before) the month of dateStr. */
+export function addMonths(dateStr, n) {
+  const [year, month] = monthStart(dateStr).split('-').map(Number);
+  const index = year * 12 + (month - 1) + n;
+  return `${pad(Math.floor(index / 12), 4)}-${pad((index % 12) + 1)}-01`;
+}
+
+/** 'November 2026'. */
+export function monthLabel(dateStr) {
+  const [year, month] = monthStart(dateStr).split('-');
+  return `${MONTH_NAMES[Number(month) - 1]} ${year}`;
+}
+
+/**
+ * The 42 days (six Monday–Sunday weeks) shown for the month of dateStr:
+ * [{ date, inMonth }].
+ */
+export function monthGrid(dateStr) {
+  const first = monthStart(dateStr);
+  const start = startOfWeek(first);
+  const month = first.slice(0, 7);
+  return Array.from({ length: 42 }, (_, i) => {
+    const date = addDays(start, i);
+    return { date, inMonth: date.slice(0, 7) === month };
+  });
+}

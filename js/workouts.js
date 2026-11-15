@@ -4,6 +4,7 @@
 import { db } from './db.js';
 import { todayStr, startOfWeek, endOfWeek } from './logic/dates.js';
 import { createWorkout, createEntry, createSet, completeWorkout, DEFAULT_SET_COUNT } from './logic/workout.js';
+import { entriesFromRoutine } from './logic/routines.js';
 
 /** Fired on window when a workout is started, finished, discarded or deleted. */
 export const WORKOUT_CHANGED = 'workout-changed';
@@ -19,13 +20,25 @@ export async function getActiveWorkout() {
   return (await db.getAllFromIndex('workouts', 'status', 'active'))[0] || null;
 }
 
-/** Starts an empty workout for today. If one is already in progress, that one is returned instead. */
-export async function startWorkout() {
+/**
+ * Starts a workout. If one is already in progress, that one is returned instead.
+ * - date:       the day it counts for (default today; a past day logs it there)
+ * - routine:    start with the routine's exercises, rows and rep ranges
+ * - plannedRef: the planned occurrence this workout fulfils ('rule:<date>' or 'oneoff:<id>')
+ */
+export async function startWorkout({ date = todayStr(), routine = null, plannedRef = null } = {}) {
   const existing = await getActiveWorkout();
   if (existing) return existing;
-  const workout = await db.saveWorkout(createWorkout({ id: crypto.randomUUID(), date: todayStr(), now: nowIso() }));
+  const workout = createWorkout({ id: crypto.randomUUID(), date, now: nowIso() });
+  workout.plannedRef = plannedRef;
+  if (routine) {
+    workout.routineId = routine.id;
+    workout.routineName = routine.name; // a snapshot: later edits to the routine don't rename old workouts
+    workout.exercises = entriesFromRoutine(routine, () => crypto.randomUUID());
+  }
+  const stored = await db.saveWorkout(workout);
   notifyWorkoutChanged();
-  return workout;
+  return stored;
 }
 
 /** Saves a workout as it is (called on every change while logging). */
